@@ -1,7 +1,24 @@
-library(shiny)
-library(ggplot2)
-library(bruceR)
-library(dplyr)
+required_packages <- c(
+  "shiny",
+  "ggplot2",
+  "dplyr",
+  "bruceR"
+)
+
+missing_packages <- required_packages[
+  !vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)
+]
+
+if (length(missing_packages) > 0) {
+  install.packages(missing_packages)
+}
+
+invisible(lapply(required_packages, library, character.only = TRUE))
+
+#library(shiny)
+#library(ggplot2)
+#library(bruceR)
+#library(dplyr)
 source("plot_code.R")
 
 ui <- fluidPage(
