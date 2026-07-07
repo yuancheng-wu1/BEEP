@@ -108,22 +108,22 @@ ui <- fluidPage(
       fluidRow(
         column(
           width = 6,
-          numericInput("x_min", "X min", value = NA)
+          numericInput("x_min", "X min", value = NA_real_)
         ),
         column(
           width = 6,
-          numericInput("x_max", "X max", value = NA)
+          numericInput("x_max", "X max", value = NA_real_)
         )
       ),
       
       fluidRow(
         column(
           width = 6,
-          numericInput("y_min", "Y min", value = NA)
+          numericInput("y_min", "Y min", value = NA_real_)
         ),
         column(
           width = 6,
-          numericInput("y_max", "Y max", value = NA)
+          numericInput("y_max", "Y max", value = NA_real_)
         )
       ),
       
