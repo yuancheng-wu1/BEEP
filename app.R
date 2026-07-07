@@ -178,14 +178,14 @@ ui <- fluidPage(
           hr(),
           
           h4("Summary statistics"),
-          p("Statistics for the dependent variable shown in the plot."),
+          tags$p("Statistics for the dependent variable shown in the plot."),
           tableOutput("summary_stats")
         ),
         
         tabPanel(
           "R code",
           br(),
-          p(
+          tags$p(
             "This code assumes your imported data are stored in the object ",
             code("dat"),
             ". Change the variable name if needed."
