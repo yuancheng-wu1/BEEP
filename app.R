@@ -2,8 +2,7 @@ library(shiny)
 library(ggplot2)
 library(bruceR)
 library(dplyr)
-app_dir <- dirname(rstudioapi::getSourceEditorContext()$path)
-source(file.path(app_dir, "plot_code.R"))
+source("plot_code.R")
 
 ui <- fluidPage(
   
