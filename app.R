@@ -18,6 +18,7 @@ invisible(lapply(required_packages, library, character.only = TRUE))
 
 
 source("plot_code.R")
+source("ui.R")
 
 ui <- page_navbar(
   
