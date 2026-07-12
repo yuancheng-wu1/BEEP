@@ -11,7 +11,7 @@ ui <- page_navbar(
       " (Build Efficient and Elegant Plots)",
       class = "d-none d-md-inline",
       style = "
-        font-size: 0.45em;
+        font-size: 0.5em;
         font-weight: normal;
       "
     )
