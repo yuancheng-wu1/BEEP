@@ -1,5 +1,6 @@
 required_packages <- c(
   "bruceR",
+  "bslib",
   "shiny",
   "ggplot2",
   "dplyr"
@@ -18,200 +19,332 @@ invisible(lapply(required_packages, library, character.only = TRUE))
 
 source("plot_code.R")
 
-ui <- fluidPage(
+ui <- page_sidebar(
   
-  titlePanel("Build Elegant and Efficient Plots (BEEP)"),
-  
-  tags$head(
-    tags$script(HTML("
-    Shiny.addCustomMessageHandler('copyToClipboard', function(message) {
-      navigator.clipboard.writeText(message.code).then(function() {
-        $('#copy_code').text('Copied!');
-        
-        setTimeout(function() {
-          $('#copy_code').text('Copy');
-        }, 1500);
-      });
-    });
-  "))
+  title = div(
+    tags$strong("BEEP"),
+    tags$span(
+      " — Build Efficient and Elegant Plots",
+      style = "font-size: 0.8em; font-weight: normal;"
+    )
   ),
   
-  sidebarLayout(
+  theme = bs_theme(
+    version = 5,
+    bootswatch = "flatly"
+  ),
+  
+  sidebar = sidebar(
+    width = 360,
+    open = "always",
     
-    sidebarPanel(
+    accordion(
+      id = "control_sections",
+      open = "plot_section",
+      multiple = TRUE,
       
-      fileInput(
-        "file",
-        "Upload data",
-        accept = c(".csv", ".xlsx", ".xls", ".rds")
-      ),
+      # ============================================================
+      # Data section
+      # ============================================================
       
-      hr(),
-      
-      selectInput(
-        "plot_type",
-        "Plot type",
-        choices = c(
-          "Scatterplot",
-          "Boxplot",
-          "Bar plot",
-          "Histogram",
-          "Line plot"
+      accordion_panel(
+        title = "1. Data",
+        value = "data_section",
+        
+        fileInput(
+          "file",
+          "Upload data",
+          accept = c(".csv", ".xlsx", ".xls", ".rds")
+        ),
+        
+        textInput(
+          "data_object",
+          "Data object name in exported code",
+          value = "dat"
         )
       ),
       
-      selectInput(
-        "x_var",
-        "X variable",
-        choices = "None",
-        selected = "None"
-      ),
+      # ============================================================
+      # Plot-building section
+      # ============================================================
       
-      checkboxInput(
-        "x_as_factor",
-        "Treat X variable as a factor",
-        value = FALSE
-      ),
-      uiOutput("x_filter_ui"),
-      
-      selectInput(
-        "y_var",
-        "Y variable",
-        choices = "None",
-        selected = "None"
-      ),
-      
-      selectInput(
-        "group_var",
-        "Color / group variable",
-        choices = "None",
-        selected = "None"
-      ),
-      uiOutput("group_filter_ui"),
-      
-      selectInput(
-        "facet_var",
-        "Facet variable",
-        choices = "None",
-        selected = "None"
-      ),
-      uiOutput("facet_filter_ui"),
-      
-      textInput("plot_title", "Plot title", ""),
-      textInput("x_label_custom", "X-axis label",""),
-      textInput("y_label_custom","Y-axis label",""),
-      
-      h4("Axis limits"),
-      
-      fluidRow(
-        column(
-          width = 6,
-          numericInput("x_min", "X min", value = NA_real_)
+      accordion_panel(
+        title = "2. Plot building",
+        value = "plot_section",
+        
+        selectInput(
+          "plot_type",
+          "Plot type",
+          choices = c(
+            "Scatterplot",
+            "Boxplot",
+            "Bar plot",
+            "Histogram",
+            "Line plot"
+          )
         ),
-        column(
-          width = 6,
-          numericInput("x_max", "X max", value = NA_real_)
+        
+        selectInput(
+          "x_var",
+          "X variable",
+          choices = "None",
+          selected = "None"
+        ),
+        
+        checkboxInput(
+          "x_as_factor",
+          "Treat X variable as a factor",
+          value = FALSE
+        ),
+        
+        uiOutput("x_filter_ui"),
+        
+        selectInput(
+          "y_var",
+          "Y variable",
+          choices = "None",
+          selected = "None"
+        ),
+        
+        selectInput(
+          "group_var",
+          "Color / group variable",
+          choices = "None",
+          selected = "None"
+        ),
+        
+        uiOutput("group_filter_ui"),
+        
+        selectInput(
+          "facet_var",
+          "Facet variable",
+          choices = "None",
+          selected = "None"
+        ),
+        
+        uiOutput("facet_filter_ui"),
+        
+        checkboxInput(
+          "add_smooth",
+          "Add regression line",
+          value = FALSE
         )
       ),
       
-      fluidRow(
-        column(
-          width = 6,
-          numericInput("y_min", "Y min", value = NA_real_)
+      # ============================================================
+      # Refinement section
+      # ============================================================
+      
+      accordion_panel(
+        title = "3. Refinement",
+        value = "refinement_section",
+        
+        textInput(
+          "plot_title",
+          "Plot title",
+          value = ""
         ),
-        column(
-          width = 6,
-          numericInput("y_max", "Y max", value = NA_real_)
+        
+        textInput(
+          "x_label_custom",
+          "X-axis label",
+          value = ""
+        ),
+        
+        textInput(
+          "y_label_custom",
+          "Y-axis label",
+          value = ""
+        ),
+        
+        textInput(
+          "legend_title",
+          "Legend title",
+          value = ""
+        ),
+        
+        tags$hr(),
+        
+        tags$strong("Axis limits"),
+        
+        fluidRow(
+          column(
+            width = 6,
+            numericInput(
+              "x_min",
+              "X minimum",
+              value = NA_real_
+            )
+          ),
+          column(
+            width = 6,
+            numericInput(
+              "x_max",
+              "X maximum",
+              value = NA_real_
+            )
+          )
+        ),
+        
+        fluidRow(
+          column(
+            width = 6,
+            numericInput(
+              "y_min",
+              "Y minimum",
+              value = NA_real_
+            )
+          ),
+          column(
+            width = 6,
+            numericInput(
+              "y_max",
+              "Y maximum",
+              value = NA_real_
+            )
+          )
+        ),
+        
+        tags$hr(),
+        
+        selectInput(
+          "plot_theme",
+          "Plot theme",
+          choices = c(
+            "Minimal" = "minimal",
+            "Classic" = "classic",
+            "Black and white" = "bw",
+            "Light" = "light"
+          ),
+          selected = "minimal"
+        ),
+        
+        uiOutput("group_refinement_ui")
+      ),
+      
+      # ============================================================
+      # Download section
+      # ============================================================
+      
+      accordion_panel(
+        title = "4. Download",
+        value = "download_section",
+        
+        selectInput(
+          "plot_format",
+          "Download format",
+          choices = c(
+            "PNG" = "png",
+            "TIFF" = "tiff",
+            "PDF" = "pdf",
+            "SVG" = "svg",
+            "JPEG" = "jpeg"
+          ),
+          selected = "png"
+        ),
+        
+        tags$small(
+          "PNG is the default format.",
+          class = "text-muted"
+        ),
+        
+        br(),
+        br(),
+        
+        fluidRow(
+          column(
+            width = 6,
+            numericInput(
+              "plot_width",
+              "Width (inches)",
+              value = 7,
+              min = 1
+            )
+          ),
+          column(
+            width = 6,
+            numericInput(
+              "plot_height",
+              "Height (inches)",
+              value = 5,
+              min = 1
+            )
+          )
+        ),
+        
+        numericInput(
+          "plot_dpi",
+          "Resolution (dpi)",
+          value = 300,
+          min = 72
+        ),
+        
+        downloadButton(
+          "download_plot",
+          "Download plot",
+          class = "btn-primary w-100"
+        )
+      )
+    )
+  ),
+  
+  # ==============================================================
+  # Main display area
+  # ==============================================================
+  
+  navset_card_tab(
+    
+    nav_panel(
+      "Plot preview",
+      
+      card(
+        full_screen = TRUE,
+        card_header("Figure"),
+        plotOutput(
+          "plot",
+          height = "650px"
         )
       ),
       
-      checkboxInput(
-        "add_smooth",
-        "Add regression line",
-        value = FALSE
-      ),
-      
-      hr(),
-
-      selectInput(
-        "plot_format",
-        "Download format",
-        choices = c(
-          "PNG"  = "png",
-          "TIFF" = "tiff",
-          "PDF"  = "pdf",
-          "SVG"  = "svg",
-          "JPEG" = "jpeg"
+      card(
+        card_header("Summary statistics"),
+        tags$p(
+          "Statistics for the dependent variable shown in the plot.",
+          class = "text-muted"
         ),
-        selected = "png"
-      ),
-      tags$small("PNG is the default format.")
-      
-      numericInput(
-        "plot_width",
-        "Width (inches)",
-        value = 7,
-        min = 1
-      ),
-      
-      numericInput(
-        "plot_height",
-        "Height (inches)",
-        value = 5,
-        min = 1
-      ),
-      
-      numericInput(
-        "plot_dpi",
-        "Resolution (dpi)",
-        value = 300,
-        min = 72
-      ),
-      
-      downloadButton("download_plot", "Download plot")
+        tableOutput("summary_stats")
+      )
     ),
     
-    mainPanel(
+    nav_panel(
+      "Data preview",
       
-      h3("Data preview"),
-      tableOutput("data_preview"),
+      card(
+        card_header("Imported data"),
+        tableOutput("data_preview")
+      )
+    ),
+    
+    nav_panel(
+      "R code",
       
-      hr(),
-      
-      tabsetPanel(
+      card(
+        card_header("Reproducible plotting code"),
         
-        tabPanel(
-          "Plot preview",
-          br(),
-          
-          h4(""),
-          plotOutput("plot", height = "650px"),
-          
-          hr(),
-          
-          h4("Summary statistics"),
-          tags$p("Statistics for the dependent variable shown in the plot."),
-          tableOutput("summary_stats")
+        tags$p(
+          "The generated code reproduces the current plot settings.",
+          class = "text-muted"
         ),
         
-        tabPanel(
-          "R code",
-          br(),
-          tags$p(
-            "This code assumes your imported data are stored in the object ",
-            code("dat"),
-            ". Change the variable name if needed."
-          ),
-          verbatimTextOutput("plot_code"),
-          br(),
-          fluidRow(
-            column(
-              width = 2,
-              actionButton("copy_code", "Copy")
-            ),
-            column(
-              width = 3,
-              downloadButton("download_code", "Download R code")
+        verbatimTextOutput("plot_code"),
+        
+        card_footer(
+          div(
+            class = "d-flex gap-2",
+            actionButton("copy_code", "Copy code"),
+            downloadButton(
+              "download_code",
+              "Download R code"
             )
           )
         )
