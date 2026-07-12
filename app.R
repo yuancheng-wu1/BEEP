@@ -219,6 +219,95 @@ server <- function(input, output, session) {
     
     dat
   })
+
+  # ---------- group name change ----------
+    group_levels_current <- reactive({
+    
+      req(input$file)
+      
+      group_var <- input$group_var %||% "None"
+      
+      if (group_var == "None") {
+        return(character(0))
+      }
+    
+    dat <- plot_data()
+    
+    if (!group_var %in% names(dat)) {
+      return(character(0))
+    }
+    
+    group_levels <- unique(
+      as.character(dat[[group_var]])
+    )
+    
+    group_levels <- group_levels[!is.na(group_levels)]
+    
+    group_levels
+  })
+
+  output$group_refinement_ui <- renderUI({
+  
+    group_levels <- group_levels_current()
+    
+    if (length(group_levels) == 0) {
+      return(NULL)
+    }
+    
+    tagList(
+      
+      tags$p(
+        "Edit the name for each legend level.",
+        class = "text-muted"
+      ),
+      
+      lapply(seq_along(group_levels), function(i) {
+        
+        textInput(
+          inputId = paste0("group_label_", i),
+          label = paste0(
+            "Rename “",
+            group_levels[i],
+            "”"
+          ),
+          value = group_levels[i]
+        )
+      })
+    )
+  }) 
+
+  group_label_values <- reactive({
+  
+    group_levels <- group_levels_current()
+    
+      if (length(group_levels) == 0) {
+        return(NULL)
+      }
+      
+      edited_labels <- vapply(
+        seq_along(group_levels),
+        function(i) {
+          
+          new_label <- input[[paste0("group_label_", i)]]
+          
+          if (
+            is.null(new_label) ||
+            !nzchar(trimws(new_label))
+          ) {
+            group_levels[i]
+          } else {
+            trimws(new_label)
+          }
+        },
+        character(1)
+      )
+      
+      stats::setNames(
+        edited_labels,
+        group_levels
+      )
+    })
+
   
   plot_object <- reactive({
     
@@ -572,61 +661,129 @@ server <- function(input, output, session) {
       
     } else {
       
-      if (input$x_as_factor) {
-        paste0(x_var, " (factor)")
+      if (isTRUE(input$x_as_factor)) {
+        x_var
       } else {
         x_var
       }
     }
     
-    y_label <- if (input$plot_type %in% c("Histogram")) {
+    y_label <- if (input$plot_type == "Histogram") {
       "Count"
     } else {
       y_var
     }
     
-    if (nzchar(input$x_label_custom)) {
+    if (nzchar(input$x_label_custom %||% "")) {
       x_label <- input$x_label_custom
     }
     
-    if (nzchar(input$y_label_custom)) {
+    if (nzchar(input$y_label_custom %||% "")) {
       y_label <- input$y_label_custom
     }
-    group_label <- if (has_group) group_var else NULL
     
-    # ----- axis limits -----
+    # ---------- legend title ----------
+    
+    legend_title <- if (has_group) {
+      
+      custom_title <- trimws(input$legend_title %||% "")
+      
+      if (nzchar(custom_title)) {
+        custom_title
+      } else {
+        group_var
+      }
+      
+    } else {
+      NULL
+    }
+    
+    # ---------- axis limits ----------
     
     x_limits <- c(input$x_min, input$x_max)
     y_limits <- c(input$y_min, input$y_max)
     
-    # Replace missing limits with NA_real_
     x_limits[is.na(x_limits)] <- NA_real_
     y_limits[is.na(y_limits)] <- NA_real_
     
-    # Categorical X variables should not receive numeric X limits
+    has_x_limits <- any(!is.na(x_limits))
+    has_y_limits <- any(!is.na(y_limits))
+    
     can_limit_x <- has_x &&
       !isTRUE(input$x_as_factor) &&
       is.numeric(dat[[x_var]])
     
-    if (can_limit_x || any(!is.na(y_limits))) {
+    if (
+      (can_limit_x && has_x_limits) ||
+      has_y_limits
+    ) {
+      
       p <- p +
         coord_cartesian(
-          xlim = if (can_limit_x) x_limits else NULL,
-          ylim = y_limits
+          xlim = if (
+            can_limit_x &&
+            has_x_limits
+          ) {
+            x_limits
+          } else {
+            NULL
+          },
+          
+          ylim = if (has_y_limits) {
+            y_limits
+          } else {
+            NULL
+          }
         )
     }
     
-    p +
+    # ---------- general plot labels ----------
+    
+    p <- p +
       labs(
         title = input$plot_title,
         x = x_label,
-        y = y_label,
-        color = group_label,
-        fill = group_label
-      ) +
+        y = y_label
+      )
+    
+    # ---------- legend level labels ----------
+    
+    if (has_group) {
+      
+      legend_labels <- group_label_values()
+      
+      if (!is.null(legend_labels)) {
+        
+        p <- p +
+          scale_color_discrete(
+            name = legend_title,
+            breaks = names(legend_labels),
+            labels = unname(legend_labels)
+          ) +
+          scale_fill_discrete(
+            name = legend_title,
+            breaks = names(legend_labels),
+            labels = unname(legend_labels)
+          )
+      }
+    }
+    
+    # ---------- theme ----------
+    
+    selected_theme <- switch(
+      input$plot_theme,
+      "classic" = theme_classic(base_size = 14),
+      "bw" = theme_bw(base_size = 14),
+      "light" = theme_light(base_size = 14),
       theme_minimal(base_size = 14)
+    )
+
+    p <- p + selected_theme
+    
+    p
   })
-  
+
+  #### summay statistics
   summary_data <- reactive({
     
     if (is.null(input$file)) {
@@ -747,6 +904,10 @@ server <- function(input, output, session) {
     
     result
   })
+
+
+      
+  
   
   # ---------- save R codes ----------
   plot_code <- reactive({
