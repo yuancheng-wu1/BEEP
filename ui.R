@@ -268,11 +268,17 @@ ui <- page_navbar(
               value = ""
             ),
             
+            tags$hr(),
+            
+            tags$strong("Legend labels"),
+            
             textInput(
               inputId = "legend_title",
               label = "Legend title",
               value = ""
             ),
+            
+            uiOutput("group_refinement_ui"),
             
             tags$hr(),
             
@@ -281,7 +287,6 @@ ui <- page_navbar(
             fluidRow(
               column(
                 width = 6,
-                
                 numericInput(
                   inputId = "x_min",
                   label = "X minimum",
@@ -291,7 +296,6 @@ ui <- page_navbar(
               
               column(
                 width = 6,
-                
                 numericInput(
                   inputId = "x_max",
                   label = "X maximum",
@@ -303,7 +307,6 @@ ui <- page_navbar(
             fluidRow(
               column(
                 width = 6,
-                
                 numericInput(
                   inputId = "y_min",
                   label = "Y minimum",
@@ -313,7 +316,6 @@ ui <- page_navbar(
               
               column(
                 width = 6,
-                
                 numericInput(
                   inputId = "y_max",
                   label = "Y maximum",
@@ -322,9 +324,21 @@ ui <- page_navbar(
               )
             ),
             
+            tags$hr(),
             
+            tags$strong("Appearance"),
             
-            uiOutput("group_refinement_ui")
+            selectInput(
+              inputId = "plot_theme",
+              label = "Plot theme",
+              choices = c(
+                "Minimal" = "minimal",
+                "Classic" = "classic",
+                "Black and white" = "bw",
+                "Light" = "light"
+              ),
+              selected = "minimal"
+            )
           ),
           
           # ====================================================
