@@ -182,14 +182,9 @@ ui <- page_navbar(
               )
             ),
             
-            textInput(
-              inputId = "data_object",
-              label = "Data object name in exported code",
-              value = "dat"
-            ),
             
             tags$small(
-              "Supported formats: CSV, Excel, and RDS.",
+              "Supported formats: csv, xlsx, xls and rds.",
               class = "text-muted"
             )
           ),
@@ -456,11 +451,7 @@ ui <- page_navbar(
           card_header(
             div(
               class = "d-flex justify-content-between align-items-center",
-              tags$strong("Current figure"),
-              tags$small(
-                "Use the controls on the left to update the plot.",
-                class = "text-muted"
-              )
+              tags$strong("Figure Preview"),
             )
           ),
           
@@ -528,11 +519,12 @@ ui <- page_navbar(
       full_screen = TRUE,
       
       card_header(
-        tags$strong("Reproducible plotting code")
+        tags$strong("R code")
       ),
       
       tags$p(
-        "The generated R code reproduces the current plot settings, filters, and refinements.",
+        "The following code assumes your imported data are stored in the object", code("dat"),
+            ". Change the variable name if needed."
         class = "text-muted"
       ),
       
