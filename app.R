@@ -453,6 +453,20 @@ server <- function(input, output, session) {
         drop = FALSE
       ]
     }
+
+    # Remove selected facet levels
+    exclude_facets <- input$exclude_facets %||% character(0)
+    
+    if (has_facet && length(exclude_facets) > 0) {
+      
+      dat <- dat[
+        !as.character(dat[[facet_var]]) %in% exclude_facets,
+        ,
+        drop = FALSE
+      ]
+    }
+
+
     
     # ---------- temporary plotting variables ----------
     
