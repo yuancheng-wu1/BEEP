@@ -31,7 +31,7 @@ ui <- page_sidebar(
   
   theme = bs_theme(
     version = 5,
-    bootswatch = "flatly"
+    bootswatch = "minty"
   ),
   
   sidebar = sidebar(
