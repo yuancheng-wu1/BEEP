@@ -1,8 +1,8 @@
 required_packages <- c(
+  "bruceR",
   "shiny",
   "ggplot2",
-  "dplyr",
-  "bruceR"
+  "dplyr"
 )
 
 missing_packages <- required_packages[
