@@ -53,7 +53,7 @@ ui <- page_navbar(
       
       /* Add space between title and navigation tabs */
       .navbar .navbar-nav {
-        margin-left: 3rem;
+        margin-left: 5rem;
       }
       
       .navbar-nav .nav-link {
