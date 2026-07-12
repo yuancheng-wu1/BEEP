@@ -339,21 +339,7 @@ ui <- page_navbar(
               )
             ),
             
-            tags$hr(),
             
-            tags$strong("Appearance"),
-            
-            selectInput(
-              inputId = "plot_theme",
-              label = "Plot theme",
-              choices = c(
-                "Minimal" = "minimal",
-                "Classic" = "classic",
-                "Black and white" = "bw",
-                "Light" = "light"
-              ),
-              selected = "minimal"
-            ),
             
             uiOutput("group_refinement_ui")
           ),
