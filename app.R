@@ -15,10 +15,7 @@ if (length(missing_packages) > 0) {
 
 invisible(lapply(required_packages, library, character.only = TRUE))
 
-#library(shiny)
-#library(ggplot2)
-#library(bruceR)
-#library(dplyr)
+
 source("plot_code.R")
 
 ui <- fluidPage(
@@ -98,6 +95,7 @@ ui <- fluidPage(
         choices = "None",
         selected = "None"
       ),
+      uiOutput("facet_filter_ui"),
       
       textInput("plot_title", "Plot title", ""),
       textInput("x_label_custom", "X-axis label",""),
@@ -256,37 +254,7 @@ server <- function(input, output, session) {
       selected = "None"
     )
   })
-  
-  output$group_filter_ui <- renderUI({
-    
-    req(input$file)
-    
-    group_var <- input$group_var
-    
-    if (is.null(group_var) || group_var == "None") {
-      return(NULL)
-    }
-    
-    dat <- uploaded_data()
-    
-    if (!group_var %in% names(dat)) {
-      return(NULL)
-    }
-    
-    group_levels <- sort(unique(as.character(dat[[group_var]])))
-    group_levels <- group_levels[!is.na(group_levels)]
-    
-    selectizeInput(
-      "exclude_groups",
-      "Groups to exclude",
-      choices = group_levels,
-      selected = NULL,
-      multiple = TRUE,
-      options = list(
-        placeholder = "Select groups to remove"
-      )
-    )
-  })
+
   
   output$x_filter_ui <- renderUI({
     
@@ -321,6 +289,74 @@ server <- function(input, output, session) {
     )
   })
   
+  output$group_filter_ui <- renderUI({
+    
+    req(input$file)
+    
+    group_var <- input$group_var
+    
+    if (is.null(group_var) || group_var == "None") {
+      return(NULL)
+    }
+    
+    dat <- uploaded_data()
+    
+    if (!group_var %in% names(dat)) {
+      return(NULL)
+    }
+    
+    group_levels <- sort(unique(as.character(dat[[group_var]])))
+    group_levels <- group_levels[!is.na(group_levels)]
+    
+    selectizeInput(
+      "exclude_groups",
+      "Groups to exclude",
+      choices = group_levels,
+      selected = NULL,
+      multiple = TRUE,
+      options = list(
+        placeholder = "Select groups to remove"
+      )
+    )
+  })
+
+  output$facet_filter_ui <- renderUI({
+    req(input$file)
+  
+    facet_var <- input$facet_var
+  
+    if (
+      is.null(facet_var) ||
+      facet_var == "None"
+    ) {
+      return(NULL)
+    }
+  
+    dat <- uploaded_data()
+  
+    if (!facet_var %in% names(dat)) {
+      return(NULL)
+    }
+  
+    facet_levels <- sort(
+      unique(as.character(dat[[facet_var]]))
+    )
+  
+    facet_levels <- facet_levels[!is.na(facet_levels)]
+  
+    selectizeInput(
+      inputId = "exclude_facets",
+      label = "Facet levels to exclude",
+      choices = facet_levels,
+      selected = NULL,
+      multiple = TRUE,
+      options = list(
+        placeholder = "Select facet levels to remove"
+      )
+    )
+  })
+
+  
   # ---------- preview imported data ----------
   
   output$data_preview <- renderTable({
@@ -349,25 +385,18 @@ server <- function(input, output, session) {
     exclude_groups <- input$exclude_groups %||% character(0)
     
     # Remove selected X levels only when X is treated as categorical
-    if (has_x &&
-        isTRUE(input$x_as_factor) &&
-        length(exclude_x_levels) > 0) {
-      
-      dat <- dat[
-        !as.character(dat[[x_var]]) %in% exclude_x_levels,
-        ,
-        drop = FALSE
-      ]
+    if (has_x && isTRUE(input$x_as_factor) && length(exclude_x_levels) > 0) {
+      dat |> dplyr::filter(!as.character(.data[[x_var]]) %in% exclude_x_levels)
     }
     
     # Remove selected group levels
     if (has_group && length(exclude_groups) > 0) {
-      
-      dat <- dat[
-        !as.character(dat[[group_var]]) %in% exclude_groups,
-        ,
-        drop = FALSE
-      ]
+      dat |> dplyr::filter(!as.character(.data[[group_var]]) %in% exclude_groups)
+    }
+
+    # Exclude selected facet levels
+    if (has_facet && length(exclude_facets) > 0) {
+      dat |> dplyr::filter(!as.character(.data[[facet_var]]) %in% exclude_facets)
     }
     
     dat
@@ -432,22 +461,22 @@ server <- function(input, output, session) {
     facet_var_plot <- NULL
     
     if (has_x) {
-      
-      if (input$x_as_factor) {
-        dat$.plot_x <- factor(dat[[x_var]])
+  
+      if (isTRUE(input$x_as_factor)) {
+        dat$.plot_x <- droplevels(factor(dat[[x_var]]))
         x_var_plot <- ".plot_x"
       } else {
         x_var_plot <- x_var
       }
     }
-    
+
     if (has_group) {
-      dat$.plot_group <- factor(dat[[group_var]])
+      dat$.plot_group <- droplevels(factor(dat[[group_var]]))
       group_var_plot <- ".plot_group"
     }
     
     if (has_facet) {
-      dat$.plot_facet <- factor(dat[[facet_var]])
+      dat$.plot_facet <- droplevels(factor(dat[[facet_var]]))
       facet_var_plot <- ".plot_facet"
     }
     
