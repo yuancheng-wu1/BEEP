@@ -466,7 +466,7 @@ server <- function(input, output, session) {
       ]
     }
 
-
+    validate(need(nrow(dat) > 0, "No observations remain after applying the exclusions."))
     
     # ---------- temporary plotting variables ----------
     
