@@ -8,10 +8,10 @@ ui <- page_navbar(
   title = div(
     tags$strong("BEEP"),
     tags$span(
-      " — Build Efficient and Elegant Plots",
+      " (Build Efficient and Elegant Plots)",
       class = "d-none d-md-inline",
       style = "
-        font-size: 0.82em;
+        font-size: 0.45em;
         font-weight: normal;
       "
     )
@@ -126,7 +126,7 @@ ui <- page_navbar(
   # ============================================================
   
   nav_panel(
-    "Plot builder",
+    "Single plot builder",
     
     layout_sidebar(
       
