@@ -524,7 +524,7 @@ ui <- page_navbar(
       
       tags$p(
         "The following code assumes your imported data are stored in the object", code("dat"),
-            ". Change the variable name if needed."
+            ". Change the variable name if needed.",
         class = "text-muted"
       ),
       
