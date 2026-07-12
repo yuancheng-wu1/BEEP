@@ -15,6 +15,7 @@ make_plot_code <- function(input, dat) {
   has_facet <- facet_var != "None" && facet_var %in% names(dat)
   exclude_x_levels <- input$exclude_x_levels %||% character(0)
   exclude_groups <- input$exclude_groups %||% character(0)
+  exclude_facets <- input$exclude_facets %||% character(0)
   
   if (!has_x && !has_y) {
     return("# Select at least one X or Y variable.")
@@ -73,6 +74,30 @@ make_plot_code <- function(input, dat) {
         quote_r(group_var),
         "]]) %in% c(",
         excluded_group_text,
+        "), , drop = FALSE]"
+      )
+    )
+  }
+
+  if (has_facet && length(exclude_facets) > 0) {
+  
+    excluded_facet_text <- paste(
+      vapply(
+        exclude_facets,
+        quote_r,
+        character(1)
+      ),
+      collapse = ", "
+    )
+    
+    lines <- c(
+      lines,
+      paste0(
+        "plot_data <- plot_data[",
+        "!as.character(plot_data[[",
+        quote_r(facet_var),
+        "]]) %in% c(",
+        excluded_facet_text,
         "), , drop = FALSE]"
       )
     )
