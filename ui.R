@@ -6,9 +6,9 @@ ui <- page_navbar(
   # ============================================================
   
   title = div(
-    tags$strong("BEEP"),
+    tags$strong("BEEP (Build Efficient and Elegant Plots)"),
     tags$span(
-      " (Build Efficient and Elegant Plots)",
+      " ",
       class = "d-none d-md-inline",
       style = "
         font-size: 0.5em;
