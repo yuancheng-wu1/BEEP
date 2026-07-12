@@ -132,6 +132,20 @@ ui <- fluidPage(
       ),
       
       hr(),
+
+      selectInput(
+        "plot_format",
+        "Download format",
+        choices = c(
+          "PNG"  = "png",
+          "TIFF" = "tiff",
+          "PDF"  = "pdf",
+          "SVG"  = "svg",
+          "JPEG" = "jpeg"
+        ),
+        selected = "png"
+      ),
+      tags$small("PNG is the default format.")
       
       numericInput(
         "plot_width",
@@ -959,20 +973,47 @@ server <- function(input, output, session) {
   # ---------- download plot ----------
   
   output$download_plot <- downloadHandler(
-    
+  
     filename = function() {
-      paste0("my_plot_", Sys.Date(), ".png")
+      paste0(
+        "BEEP_plot_",
+        Sys.Date(),
+        ".",
+        input$plot_format
+      )
     },
     
     content = function(file) {
       
-      ggsave(
-        filename = file,
-        plot = plot_object(),
-        width = input$plot_width,
-        height = input$plot_height,
-        dpi = input$plot_dpi
-      )
+      format <- input$plot_format %||% "png"
+      
+      if (format == "tiff") {
+        
+        ggsave(
+          filename = file,
+          plot = plot_object(),
+          device = "tiff",
+          width = input$plot_width,
+          height = input$plot_height,
+          units = "in",
+          dpi = input$plot_dpi,
+          compression = "lzw",
+          bg = "white"
+        )
+        
+      } else {
+        
+        ggsave(
+          filename = file,
+          plot = plot_object(),
+          device = format,
+          width = input$plot_width,
+          height = input$plot_height,
+          units = "in",
+          dpi = input$plot_dpi,
+          bg = "white"
+        )
+      }
     }
   )
   
