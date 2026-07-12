@@ -6,15 +6,7 @@ ui <- page_navbar(
   # ============================================================
   
   title = div(
-    tags$strong("BEEP (Build Efficient and Elegant Plots)"),
-    tags$span(
-      " ",
-      class = "d-none d-md-inline",
-      style = "
-        font-size: 0.5em;
-        font-weight: normal;
-      "
-    )
+    tags$strong("BEEP (Build Efficient and Elegant Plots)")
   ),
   
   window_title = "BEEP",
@@ -53,7 +45,7 @@ ui <- page_navbar(
       
       /* Add space between title and navigation tabs */
       .navbar .navbar-nav {
-        margin-left: 5rem;
+        margin-left: 3rem;
       }
       
       .navbar-nav .nav-link {
@@ -137,7 +129,7 @@ ui <- page_navbar(
   # ============================================================
   
   nav_panel(
-    "Single plot builder",
+    "Plot",
     
     layout_sidebar(
       
