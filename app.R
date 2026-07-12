@@ -389,17 +389,17 @@ server <- function(input, output, session) {
     
     # Remove selected X levels only when X is treated as categorical
     if (has_x && isTRUE(input$x_as_factor) && length(exclude_x_levels) > 0) {
-      dat <- |> dplyr::filter(!as.character(.data[[x_var]]) %in% exclude_x_levels)
+      dat <- dat|> dplyr::filter(!as.character(.data[[x_var]]) %in% exclude_x_levels)
     }
     
     # Remove selected group levels
     if (has_group && length(exclude_groups) > 0) {
-      dat <- |> dplyr::filter(!as.character(.data[[group_var]]) %in% exclude_groups)
+      dat <- dat|> dplyr::filter(!as.character(.data[[group_var]]) %in% exclude_groups)
     }
 
     # Exclude selected facet levels
     if (has_facet && length(exclude_facets) > 0) {
-      dat <- |> dplyr::filter(!as.character(.data[[facet_var]]) %in% exclude_facets)
+      dat <- dat|> dplyr::filter(!as.character(.data[[facet_var]]) %in% exclude_facets)
     }
     
     dat
