@@ -37,64 +37,75 @@ ui <- page_navbar(
   header = tags$head(
     
     tags$style(
-      HTML("
-        
-        /* Top navigation bar */
-        .navbar {
-          min-height: 54px;
-          padding-top: 0.35rem;
-          padding-bottom: 0.35rem;
+    HTML("
+      
+      /* Top navigation bar */
+      .navbar {
+        min-height: 54px;
+        padding-top: 0.35rem;
+        padding-bottom: 0.35rem;
+      }
+      
+      .navbar-brand {
+        font-size: 1.25rem;
+        font-weight: 600;
+      }
+      
+      /* Add space between title and navigation tabs */
+      .navbar .navbar-nav {
+        margin-left: 3rem;
+      }
+      
+      .navbar-nav .nav-link {
+        font-size: 1rem;
+        padding-left: 0.85rem !important;
+        padding-right: 0.85rem !important;
+      }
+      
+      @media (max-width: 992px) {
+        .navbar .navbar-nav {
+          margin-left: 0;
         }
-        
-        .navbar-brand {
-          font-size: 1.25rem;
-          font-weight: 600;
-        }
-        
-        .navbar-nav .nav-link {
-          font-size: 1rem;
-          padding-left: 0.85rem !important;
-          padding-right: 0.85rem !important;
-        }
-        
-        /* Main page spacing */
-        .bslib-page-navbar > .container-fluid {
-          padding-top: 1rem;
-          padding-bottom: 1rem;
-        }
-        
-        /* Plot preview width */
-        .beep-plot-container {
-          width: 100%;
-          max-width: 950px;
-          margin-left: auto;
-          margin-right: auto;
-        }
-        
-        /* Slightly softer card appearance */
-        .card {
-          border-radius: 0.45rem;
-        }
-        
-        /* Full-width download button */
-        .beep-download-button {
-          width: 100%;
-        }
-        
-        /* More compact accordion controls */
-        .accordion-body {
-          padding: 1rem;
-        }
-        
-        /* Code output area */
-        .beep-code-output pre {
-          max-height: 650px;
-          overflow-y: auto;
-          white-space: pre-wrap;
-        }
-        
-      ")
-    ),
+      }
+      
+      /* Main page spacing */
+      .bslib-page-navbar > .container-fluid {
+        padding-top: 1rem;
+        padding-bottom: 1rem;
+      }
+      
+      /* Plot preview width */
+      .beep-plot-container {
+        width: 100%;
+        max-width: 950px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+      
+      /* Slightly softer card appearance */
+      .card {
+        border-radius: 0.45rem;
+      }
+      
+      /* Full-width download button */
+      .beep-download-button {
+        width: 100%;
+      }
+      
+      /* More compact accordion controls */
+      .accordion-body {
+        padding: 1rem;
+      }
+      
+      /* Code output area */
+      .beep-code-output pre {
+        max-height: 650px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+      }
+      
+    ")
+  ),
     
     tags$script(
       HTML("
