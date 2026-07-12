@@ -12,10 +12,54 @@ make_plot_code <- function(input, dat) {
   has_x <- x_var != "None" && x_var %in% names(dat)
   has_y <- y_var != "None" && y_var %in% names(dat)
   has_group <- group_var != "None" && group_var %in% names(dat)
+  
+  legend_title <- trimws(input$legend_title %||% "")
+  if (has_group && !nzchar(legend_title)) {
+    legend_title <- group_var
+  }
+  plot_theme <- input$plot_theme %||% "minimal"
+  
   has_facet <- facet_var != "None" && facet_var %in% names(dat)
   exclude_x_levels <- input$exclude_x_levels %||% character(0)
   exclude_groups <- input$exclude_groups %||% character(0)
   exclude_facets <- input$exclude_facets %||% character(0)
+
+  group_levels <- character(0)
+  edited_group_labels <- character(0)
+
+  if (has_group) {
+  
+    group_levels <- unique(as.character(dat[[group_var]]))
+    group_levels <- group_levels[!is.na(group_levels)]
+  
+    exclude_groups <- input$exclude_groups %||% character(0)
+  
+    if (length(exclude_groups) > 0) {
+      group_levels <- group_levels[
+        !group_levels %in% exclude_groups
+      ]
+    }
+  
+    edited_group_labels <- vapply(
+      seq_along(group_levels),
+      function(i) {
+  
+        new_label <- input[[paste0("group_label_", i)]]
+  
+        if (
+          is.null(new_label) ||
+          !nzchar(trimws(new_label))
+        ) {
+          group_levels[i]
+        } else {
+          trimws(new_label)
+        }
+      },
+      character(1)
+    )
+  }
+
+  
   
   if (!has_x && !has_y) {
     return("# Select at least one X or Y variable.")
@@ -111,7 +155,7 @@ make_plot_code <- function(input, dat) {
     if (isTRUE(input$x_as_factor)) {
       lines <- c(
         lines,
-        "plot_data$.plot_x <- factor(plot_data[[x_var]])",
+        "plot_data$.plot_x <- droplevels(factor(plot_data[[x_var]]))",
         'x_var_plot <- ".plot_x"'
       )
     } else {
@@ -127,7 +171,7 @@ make_plot_code <- function(input, dat) {
     lines <- c(
       lines,
       paste0("group_var <- ", quote_r(group_var)),
-      "plot_data$.plot_group <- factor(plot_data[[group_var]])",
+      "plot_data$.plot_group <- droplevels(factor(plot_data[[group_var]]))",
       'group_var_plot <- ".plot_group"'
     )
   }
@@ -136,7 +180,7 @@ make_plot_code <- function(input, dat) {
     lines <- c(
       lines,
       paste0("facet_var <- ", quote_r(facet_var)),
-      "plot_data$.plot_facet <- factor(plot_data[[facet_var]])",
+      "plot_data$.plot_facet <- droplevels(factor(plot_data[[facet_var]]))",
       'facet_var_plot <- ".plot_facet"'
     )
   }
@@ -173,9 +217,20 @@ make_plot_code <- function(input, dat) {
   
   # ----- define aesthetics -----
   
-  if (input$plot_type %in% c("Histogram", "Bar plot")) {
+  if (input$plot_type == "Histogram") {
     
     aes_parts <- paste0("x = ", x_expr)
+    
+    if (has_group) {
+      aes_parts <- c(aes_parts, paste0("fill = ", group_expr))
+    }
+    
+  } else if (input$plot_type == "Bar plot") {
+    
+    aes_parts <- c(
+      paste0("x = ", x_expr),
+      paste0("y = ", y_expr)
+    )
     
     if (has_group) {
       aes_parts <- c(aes_parts, paste0("fill = ", group_expr))
@@ -402,14 +457,14 @@ make_plot_code <- function(input, dat) {
     x_var
   }
   
-  y_label <- if (input$plot_type %in% c("Histogram", "Bar plot")) {
+  y_label <- if (input$plot_type == "Histogram") {
     "Count"
   } else {
     y_var
   }
   
-  x_label_custom <- input$x_label_custom %||% ""
-  y_label_custom <- input$y_label_custom %||% ""
+  x_label_custom <- trimws(input$x_label_custom %||% "")
+  y_label_custom <- trimws(input$y_label_custom %||% "")
   
   if (nzchar(x_label_custom)) {
     x_label <- x_label_custom
@@ -425,22 +480,68 @@ make_plot_code <- function(input, dat) {
     paste0("y = ", quote_r(y_label))
   )
   
-  if (has_group) {
-    label_parts <- c(
-      label_parts,
-      paste0("color = ", quote_r(group_var)),
-      paste0("fill = ", quote_r(group_var))
-    )
-  }
-  
   lines <- c(
     lines,
+    "",
     paste0(
       "p <- p + labs(",
       paste(label_parts, collapse = ", "),
-      ") +"
-    ),
-    "  theme_minimal(base_size = 14)",
+      ")"
+    )
+  )
+  
+  # ----- legend title and renamed group levels -----
+  
+  if (has_group && length(group_levels) > 0) {
+    
+    breaks_code <- paste(
+      vapply(group_levels, quote_r, character(1)),
+      collapse = ", "
+    )
+    
+    labels_code <- paste(
+      vapply(edited_group_labels, quote_r, character(1)),
+      collapse = ", "
+    )
+    
+    if (input$plot_type %in% c("Histogram", "Bar plot")) {
+      lines <- c(
+        lines,
+        "",
+        "p <- p + scale_fill_discrete(",
+        paste0("  name = ", quote_r(legend_title), ","),
+        paste0("  breaks = c(", breaks_code, "),"),
+        paste0("  labels = c(", labels_code, ")"),
+        ")"
+      )
+      
+    } else {
+      lines <- c(
+        lines,
+        "",
+        "p <- p + scale_color_discrete(",
+        paste0("  name = ", quote_r(legend_title), ","),
+        paste0("  breaks = c(", breaks_code, "),"),
+        paste0("  labels = c(", labels_code, ")"),
+        ")"
+      )
+    }
+  }
+  
+  # ----- theme -----
+  
+  theme_code <- switch(
+    plot_theme,
+    "classic" = "theme_classic(base_size = 14)",
+    "bw" = "theme_bw(base_size = 14)",
+    "light" = "theme_light(base_size = 14)",
+    "theme_minimal(base_size = 14)"
+  )
+  
+  lines <- c(
+    lines,
+    "",
+    paste0("p <- p + ", theme_code),
     "",
     "p"
   )
