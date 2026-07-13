@@ -1,5 +1,5 @@
 # BEEP
-Build Elegant and Efficient Plots (BEEP)
+Build Efficient and Elegant Plots (BEEP)
 
 BEEP is a shiny app built with ggplot2. It provides an interactive interface to easily visualize research data. It is developed to make plotting more efficient and to save time on repetitive plotting tasks when creating various types of graphs in R.
 
