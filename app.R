@@ -308,7 +308,97 @@ server <- function(input, output, session) {
       )
     })
 
+
+  # ---------- facet name change ----------
+  facet_levels_current <- reactive({
+
+    req(input$file)
   
+    facet_var <- input$facet_var %||% "None"
+  
+    if (facet_var == "None") {
+      return(character(0))
+    }
+  
+    dat <- plot_data()
+  
+    if (!facet_var %in% names(dat)) {
+      return(character(0))
+    }
+  
+    facet_levels <- unique(
+      as.character(dat[[facet_var]])
+    )
+  
+    facet_levels <- facet_levels[!is.na(facet_levels)]
+  
+    facet_levels
+  })
+
+  output$facet_refinement_ui <- renderUI({
+
+    facet_levels <- facet_levels_current()
+  
+    if (length(facet_levels) == 0) {
+      return(NULL)
+    }
+  
+    tagList(
+  
+      tags$p(
+        "Edit the label shown at the top of each facet panel.",
+        class = "text-muted"
+      ),
+  
+      lapply(seq_along(facet_levels), function(i) {
+  
+        textInput(
+          inputId = paste0("facet_label_", i),
+          label = paste0(
+            "Rename “",
+            facet_levels[i],
+            "”"
+          ),
+          value = facet_levels[i]
+        )
+      })
+    )
+  })
+
+  facet_label_values <- reactive({
+
+    facet_levels <- facet_levels_current()
+  
+    if (length(facet_levels) == 0) {
+      return(NULL)
+    }
+  
+    edited_labels <- vapply(
+      seq_along(facet_levels),
+      function(i) {
+  
+        new_label <- input[[paste0("facet_label_", i)]]
+  
+        if (
+          is.null(new_label) ||
+          !nzchar(trimws(new_label))
+        ) {
+          facet_levels[i]
+        } else {
+          trimws(new_label)
+        }
+      },
+      character(1)
+    )
+  
+    stats::setNames(
+      edited_labels,
+      facet_levels
+    )
+  })
+
+
+  # ---------- draw plot ----------
   plot_object <- reactive({
     
     validate(
@@ -636,10 +726,24 @@ server <- function(input, output, session) {
     # ---------- facets ----------
     
     if (has_facet) {
-      p <- p +
-        facet_wrap(
-          vars(.data[[facet_var_plot]])
-        )
+
+      facet_labels <- facet_label_values()
+
+      if (!is.null(facet_labels)) {
+    
+        p <- p +
+          facet_wrap(
+            vars(.data[[facet_var_plot]]),
+            labeller = as_labeller(facet_labels)
+          )
+    
+      } else {
+    
+        p <- p +
+          facet_wrap(
+            vars(.data[[facet_var_plot]])
+          )
+      }
     }
     
     # ---------- labels ----------
