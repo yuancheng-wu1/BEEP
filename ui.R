@@ -279,6 +279,12 @@ ui <- page_navbar(
             ),
             
             uiOutput("group_refinement_ui"),
+
+            tags$hr(),
+
+            tags$strong("Facet level names"),
+            
+            uiOutput("facet_refinement_ui"),
             
             tags$hr(),
             
