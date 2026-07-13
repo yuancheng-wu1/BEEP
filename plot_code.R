@@ -59,6 +59,42 @@ make_plot_code <- function(input, dat) {
     )
   }
 
+  facet_levels <- character(0)
+  edited_facet_labels <- character(0)
+  
+  if (has_facet) {
+  
+    facet_levels <- unique(
+      as.character(dat[[facet_var]])
+    )
+  
+    facet_levels <- facet_levels[!is.na(facet_levels)]
+  
+    if (length(exclude_facets) > 0) {
+      facet_levels <- facet_levels[
+        !facet_levels %in% exclude_facets
+      ]
+    }
+  
+    edited_facet_labels <- vapply(
+      seq_along(facet_levels),
+      function(i) {
+  
+        new_label <- input[[paste0("facet_label_", i)]]
+  
+        if (
+          is.null(new_label) ||
+          !nzchar(trimws(new_label))
+        ) {
+          facet_levels[i]
+        } else {
+          trimws(new_label)
+        }
+      },
+      character(1)
+    )
+  }
+
   
   
   if (!has_x && !has_y) {
@@ -365,14 +401,54 @@ make_plot_code <- function(input, dat) {
     lines <- c(lines, "p <- p + geom_line()")
   }
   
-  # ----- facet -----
   
-  if (has_facet) {
+  # ----- facet -----
+
+if (has_facet) {
+
+  if (length(facet_levels) > 0) {
+
+    facet_breaks_code <- paste(
+      vapply(
+        facet_levels,
+        quote_r,
+        character(1)
+      ),
+      collapse = ", "
+    )
+
+    facet_labels_code <- paste(
+      vapply(
+        edited_facet_labels,
+        quote_r,
+        character(1)
+      ),
+      collapse = ", "
+    )
+
+    lines <- c(
+      lines,
+      "",
+      paste0(
+        "facet_labels <- stats::setNames(",
+        "c(", facet_labels_code, "), ",
+        "c(", facet_breaks_code, ")",
+        ")"
+      ),
+      "p <- p + facet_wrap(",
+      "  vars(.data[[facet_var_plot]]),",
+      "  labeller = as_labeller(facet_labels)",
+      ")"
+    )
+
+  } else {
+
     lines <- c(
       lines,
       "p <- p + facet_wrap(vars(.data[[facet_var_plot]]))"
     )
   }
+}
   
   # ----- axis limits -----
   
