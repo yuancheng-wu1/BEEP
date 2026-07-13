@@ -6,4 +6,6 @@ BEEP is a shiny app built with ggplot2. It provides an interactive interface to 
 Declaration: 
 This app is a collaborated project with ChatGPT and is still under construction. Basic plots are currently available, including scatter plot, bar chart, boxplot, histogram and line chart. More features are on the way :)
 
+You can get access to BEEP in R through shiny::runGitHub("BEEP", "yuancheng-wu1")
+
 Welcome to use BEEP and feel free to leave any feedback!
