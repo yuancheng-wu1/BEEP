@@ -24,6 +24,59 @@ make_plot_code <- function(input, dat) {
   exclude_groups <- input$exclude_groups %||% character(0)
   exclude_facets <- input$exclude_facets %||% character(0)
 
+  x_is_discrete <- has_x &&
+    (
+      isTRUE(input$x_as_factor) ||
+        is.factor(dat[[x_var]]) ||
+        is.character(dat[[x_var]]) ||
+        is.logical(dat[[x_var]])
+    )
+
+  x_levels <- character(0)
+  edited_x_labels <- character(0)
+
+  if (x_is_discrete) {
+    keep_x_rows <- rep(TRUE, nrow(dat))
+
+    if (isTRUE(input$x_as_factor) && length(exclude_x_levels) > 0) {
+      keep_x_rows <- keep_x_rows &
+        !as.character(dat[[x_var]]) %in% exclude_x_levels
+    }
+
+    if (has_group && length(exclude_groups) > 0) {
+      keep_x_rows <- keep_x_rows &
+        !as.character(dat[[group_var]]) %in% exclude_groups
+    }
+
+    if (has_facet && length(exclude_facets) > 0) {
+      keep_x_rows <- keep_x_rows &
+        !as.character(dat[[facet_var]]) %in% exclude_facets
+    }
+
+    x_values <- dat[[x_var]][keep_x_rows]
+
+    if (isTRUE(input$x_as_factor) || is.factor(x_values)) {
+      x_levels <- levels(droplevels(factor(x_values)))
+    } else {
+      x_levels <- sort(unique(as.character(x_values)))
+      x_levels <- x_levels[!is.na(x_levels)]
+    }
+
+    edited_x_labels <- vapply(
+      seq_along(x_levels),
+      function(i) {
+        new_label <- input[[paste0("x_label_", i)]]
+
+        if (is.null(new_label) || !nzchar(trimws(new_label))) {
+          x_levels[i]
+        } else {
+          trimws(new_label)
+        }
+      },
+      character(1)
+    )
+  }
+
   group_levels <- character(0)
   edited_group_labels <- character(0)
 
@@ -113,9 +166,22 @@ make_plot_code <- function(input, dat) {
   
   lines <- c(
     "library(ggplot2)",
-    "",
-    paste0("plot_data <- ", data_name)
+    ""
   )
+
+  file_name <- input$file$name %||% ""
+  is_excel_file <- tolower(tools::file_ext(file_name)) %in% c("xlsx", "xls")
+  selected_sheet <- input$excel_sheet %||% ""
+
+  if (is_excel_file && nzchar(selected_sheet)) {
+    lines <- c(
+      lines,
+      paste0("# Excel sheet selected in BEEP: ", quote_r(selected_sheet)),
+      ""
+    )
+  }
+
+  lines <- c(lines, paste0("plot_data <- ", data_name))
   
   if (has_x &&
       isTRUE(input$x_as_factor) &&
@@ -513,6 +579,29 @@ if (has_facet) {
         ", ylim = ", y_limit_code,
         ")"
       )
+    )
+  }
+
+  # ----- renamed discrete X-axis levels -----
+
+  if (x_is_discrete && length(x_levels) > 0) {
+    x_breaks_code <- paste(
+      vapply(x_levels, quote_r, character(1)),
+      collapse = ", "
+    )
+
+    x_labels_code <- paste(
+      vapply(edited_x_labels, quote_r, character(1)),
+      collapse = ", "
+    )
+
+    lines <- c(
+      lines,
+      "",
+      "p <- p + scale_x_discrete(",
+      paste0("  breaks = c(", x_breaks_code, "),"),
+      paste0("  labels = c(", x_labels_code, ")"),
+      ")"
     )
   }
   

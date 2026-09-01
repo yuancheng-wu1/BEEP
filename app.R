@@ -3,7 +3,8 @@ required_packages <- c(
   "bslib",
   "shiny",
   "ggplot2",
-  "dplyr"
+  "dplyr",
+  "readxl"
 )
 
 missing_packages <- required_packages[
@@ -22,6 +23,39 @@ source("ui.R")
 
 
 server <- function(input, output, session) {
+
+  # ---------- Excel sheet selection ----------
+
+  is_excel_file <- reactive({
+    req(input$file)
+    tolower(tools::file_ext(input$file$name)) %in% c("xlsx", "xls")
+  })
+
+  excel_sheet_names <- reactive({
+    req(is_excel_file())
+    readxl::excel_sheets(input$file$datapath)
+  })
+
+  output$sheet_selector_ui <- renderUI({
+    req(input$file)
+
+    if (!is_excel_file()) {
+      return(NULL)
+    }
+
+    sheets <- excel_sheet_names()
+
+    validate(
+      need(length(sheets) > 0, "No worksheets were found in this file.")
+    )
+
+    selectInput(
+      inputId = "excel_sheet",
+      label = "Sheet to import",
+      choices = sheets,
+      selected = sheets[1]
+    )
+  })
   
   # ---------- import data ----------
   
@@ -29,10 +63,26 @@ server <- function(input, output, session) {
     
     req(input$file)
     
-    bruceR::import(
-      input$file$datapath,
-      as = "data.frame"
-    )
+    if (is_excel_file()) {
+      sheets <- excel_sheet_names()
+      selected_sheet <- input$excel_sheet
+
+      req(
+        !is.null(selected_sheet),
+        selected_sheet %in% sheets
+      )
+
+      bruceR::import(
+        input$file$datapath,
+        sheet = selected_sheet,
+        as = "data.frame"
+      )
+    } else {
+      bruceR::import(
+        input$file$datapath,
+        as = "data.frame"
+      )
+    }
   })
   
   # ---------- update variable menus after upload ----------
@@ -218,6 +268,90 @@ server <- function(input, output, session) {
     }
     
     dat
+  })
+
+  # ---------- X-axis level name change ----------
+  x_levels_current <- reactive({
+
+    req(input$file)
+
+    x_var <- input$x_var %||% "None"
+
+    if (x_var == "None") {
+      return(character(0))
+    }
+
+    dat <- plot_data()
+
+    if (!x_var %in% names(dat)) {
+      return(character(0))
+    }
+
+    x_is_discrete <- isTRUE(input$x_as_factor) ||
+      is.factor(dat[[x_var]]) ||
+      is.character(dat[[x_var]]) ||
+      is.logical(dat[[x_var]])
+
+    if (!x_is_discrete) {
+      return(character(0))
+    }
+
+    if (isTRUE(input$x_as_factor) || is.factor(dat[[x_var]])) {
+      return(levels(droplevels(factor(dat[[x_var]]))))
+    }
+
+    x_levels <- sort(unique(as.character(dat[[x_var]])))
+    x_levels[!is.na(x_levels)]
+  })
+
+  output$x_refinement_ui <- renderUI({
+
+    x_levels <- x_levels_current()
+
+    if (length(x_levels) == 0) {
+      return(NULL)
+    }
+
+    tagList(
+      tags$hr(),
+      tags$strong("X-axis level names"),
+      tags$p(
+        "Edit the label shown for each discrete X-axis level.",
+        class = "text-muted"
+      ),
+      lapply(seq_along(x_levels), function(i) {
+        textInput(
+          inputId = paste0("x_label_", i),
+          label = paste0("Rename “", x_levels[i], "”"),
+          value = x_levels[i]
+        )
+      })
+    )
+  })
+
+  x_label_values <- reactive({
+
+    x_levels <- x_levels_current()
+
+    if (length(x_levels) == 0) {
+      return(NULL)
+    }
+
+    edited_labels <- vapply(
+      seq_along(x_levels),
+      function(i) {
+        new_label <- input[[paste0("x_label_", i)]]
+
+        if (is.null(new_label) || !nzchar(trimws(new_label))) {
+          x_levels[i]
+        } else {
+          trimws(new_label)
+        }
+      },
+      character(1)
+    )
+
+    stats::setNames(edited_labels, x_levels)
   })
 
   # ---------- group name change ----------
@@ -871,6 +1005,28 @@ server <- function(input, output, session) {
           )
       }
     }
+
+    # ---------- discrete X-axis level labels ----------
+
+    x_is_discrete <- has_x &&
+      (
+        isTRUE(input$x_as_factor) ||
+          is.factor(dat[[x_var]]) ||
+          is.character(dat[[x_var]]) ||
+          is.logical(dat[[x_var]])
+      )
+
+    if (x_is_discrete) {
+      x_level_labels <- x_label_values()
+
+      if (!is.null(x_level_labels)) {
+        p <- p +
+          scale_x_discrete(
+            breaks = names(x_level_labels),
+            labels = unname(x_level_labels)
+          )
+      }
+    }
     
     # ---------- theme ----------
     
@@ -909,7 +1065,7 @@ server <- function(input, output, session) {
     if (!has_y) {
       return(
         data.frame(
-          Message = "Select a numeric Y variable to show mean, median, and range."
+          Message = "Select a numeric Y variable to show mean, median, SD, and range."
         )
       )
     }
@@ -930,13 +1086,9 @@ server <- function(input, output, session) {
     safe_median <- function(x) {
       if (all(is.na(x))) NA_real_ else median(x, na.rm = TRUE)
     }
-    
-    safe_min <- function(x) {
-      if (all(is.na(x))) NA_real_ else min(x, na.rm = TRUE)
-    }
-    
-    safe_max <- function(x) {
-      if (all(is.na(x))) NA_real_ else max(x, na.rm = TRUE)
+
+    safe_sd <- function(x) {
+      if (sum(!is.na(x)) < 2) NA_real_ else sd(x, na.rm = TRUE)
     }
     
     safe_range <- function(x) {
@@ -981,8 +1133,7 @@ server <- function(input, output, session) {
         N = sum(!is.na(dat[[y_var]])),
         Mean = safe_mean(dat[[y_var]]),
         Median = safe_median(dat[[y_var]]),
-        Min = safe_min(dat[[y_var]]),
-        Max = safe_max(dat[[y_var]]),
+        SD = safe_sd(dat[[y_var]]),
         Range = safe_range(dat[[y_var]])
       )
       
@@ -994,8 +1145,7 @@ server <- function(input, output, session) {
           N = sum(!is.na(.data[[y_var]])),
           Mean = safe_mean(.data[[y_var]]),
           Median = safe_median(.data[[y_var]]),
-          Min = safe_min(.data[[y_var]]),
-          Max = safe_max(.data[[y_var]]),
+          SD = safe_sd(.data[[y_var]]),
           Range = safe_range(.data[[y_var]]),
           .groups = "drop"
         )
@@ -1086,14 +1236,6 @@ server <- function(input, output, session) {
   ## download R codes for the plot
   output$plot_code <- renderText({
     plot_code()
-  })
-  
-  observeEvent(input$copy_code, {
-    
-    session$sendCustomMessage(
-      "copyToClipboard",
-      list(code = plot_code())
-    )
   })
   
   output$download_code <- downloadHandler(

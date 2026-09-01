@@ -101,25 +101,76 @@ ui <- page_navbar(
     
     tags$script(
       HTML("
-        
-        Shiny.addCustomMessageHandler(
-          'copyToClipboard',
-          function(message) {
-            
-            navigator.clipboard
-              .writeText(message.code)
-              .then(function() {
-                
-                $('#copy_code').text('Copied!');
-                
-                setTimeout(function() {
-                  $('#copy_code').text('Copy code');
-                }, 1500);
-                
-              });
+        function setCopyButtonStatus(label) {
+          var button = document.getElementById('copy_code');
+
+          if (!button) {
+            return;
           }
-        );
-        
+
+          button.textContent = label;
+
+          window.setTimeout(function() {
+            button.textContent = 'Copy code';
+          }, 1500);
+        }
+
+        function legacyCopyToClipboard(text) {
+          var textArea = document.createElement('textarea');
+          textArea.value = text;
+          textArea.setAttribute('readonly', '');
+          textArea.style.position = 'fixed';
+          textArea.style.opacity = '0';
+          document.body.appendChild(textArea);
+          textArea.select();
+
+          var copied = document.execCommand('copy');
+          document.body.removeChild(textArea);
+
+          if (!copied) {
+            throw new Error('The browser rejected the copy command.');
+          }
+        }
+
+        document.addEventListener('click', function(event) {
+          var button = event.target.closest('#copy_code');
+
+          if (!button) {
+            return;
+          }
+
+          var codeOutput = document.getElementById('plot_code');
+
+          if (!codeOutput) {
+            setCopyButtonStatus('Nothing to copy');
+            return;
+          }
+
+          var code = codeOutput.textContent;
+
+          if (window.isSecureContext && navigator.clipboard) {
+            navigator.clipboard.writeText(code).then(
+              function() {
+                setCopyButtonStatus('Copied!');
+              },
+              function() {
+                try {
+                  legacyCopyToClipboard(code);
+                  setCopyButtonStatus('Copied!');
+                } catch (error) {
+                  setCopyButtonStatus('Copy failed');
+                }
+              }
+            );
+          } else {
+            try {
+              legacyCopyToClipboard(code);
+              setCopyButtonStatus('Copied!');
+            } catch (error) {
+              setCopyButtonStatus('Copy failed');
+            }
+          }
+        });
       ")
     )
   ),
@@ -164,6 +215,8 @@ ui <- page_navbar(
                 ".rds"
               )
             ),
+
+            uiOutput("sheet_selector_ui"),
             
             
             tags$small(
@@ -267,6 +320,8 @@ ui <- page_navbar(
               label = "Y-axis label",
               value = ""
             ),
+
+            uiOutput("x_refinement_ui"),
             
             tags$hr(),
             
