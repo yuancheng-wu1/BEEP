@@ -2,6 +2,46 @@
   if (is.null(x)) y else x
 }
 
+filter_plot_data <- function(input, dat) {
+  x_var <- input$x_var %||% "None"
+  group_var <- input$group_var %||% "None"
+  facet_var <- input$facet_var %||% "None"
+
+  has_x <- x_var != "None" && x_var %in% names(dat)
+  has_group <- group_var != "None" && group_var %in% names(dat)
+  has_facet <- facet_var != "None" && facet_var %in% names(dat)
+
+  exclude_x_levels <- input$exclude_x_levels %||% character(0)
+  exclude_groups <- input$exclude_groups %||% character(0)
+  exclude_facets <- input$exclude_facets %||% character(0)
+
+  if (has_x && isTRUE(input$x_as_factor) && length(exclude_x_levels) > 0) {
+    dat <- dat[
+      !as.character(dat[[x_var]]) %in% exclude_x_levels,
+      ,
+      drop = FALSE
+    ]
+  }
+
+  if (has_group && length(exclude_groups) > 0) {
+    dat <- dat[
+      !as.character(dat[[group_var]]) %in% exclude_groups,
+      ,
+      drop = FALSE
+    ]
+  }
+
+  if (has_facet && length(exclude_facets) > 0) {
+    dat <- dat[
+      !as.character(dat[[facet_var]]) %in% exclude_facets,
+      ,
+      drop = FALSE
+    ]
+  }
+
+  dat
+}
+
 make_plot_code <- function(input, dat) {
   
   x_var <- input$x_var %||% "None"
@@ -23,6 +63,7 @@ make_plot_code <- function(input, dat) {
   exclude_x_levels <- input$exclude_x_levels %||% character(0)
   exclude_groups <- input$exclude_groups %||% character(0)
   exclude_facets <- input$exclude_facets %||% character(0)
+  filtered_dat <- filter_plot_data(input, dat)
 
   x_is_discrete <- has_x &&
     (
@@ -36,24 +77,7 @@ make_plot_code <- function(input, dat) {
   edited_x_labels <- character(0)
 
   if (x_is_discrete) {
-    keep_x_rows <- rep(TRUE, nrow(dat))
-
-    if (isTRUE(input$x_as_factor) && length(exclude_x_levels) > 0) {
-      keep_x_rows <- keep_x_rows &
-        !as.character(dat[[x_var]]) %in% exclude_x_levels
-    }
-
-    if (has_group && length(exclude_groups) > 0) {
-      keep_x_rows <- keep_x_rows &
-        !as.character(dat[[group_var]]) %in% exclude_groups
-    }
-
-    if (has_facet && length(exclude_facets) > 0) {
-      keep_x_rows <- keep_x_rows &
-        !as.character(dat[[facet_var]]) %in% exclude_facets
-    }
-
-    x_values <- dat[[x_var]][keep_x_rows]
+    x_values <- filtered_dat[[x_var]]
 
     if (isTRUE(input$x_as_factor) || is.factor(x_values)) {
       x_levels <- levels(droplevels(factor(x_values)))
@@ -82,16 +106,8 @@ make_plot_code <- function(input, dat) {
 
   if (has_group) {
   
-    group_levels <- unique(as.character(dat[[group_var]]))
+    group_levels <- unique(as.character(filtered_dat[[group_var]]))
     group_levels <- group_levels[!is.na(group_levels)]
-  
-    exclude_groups <- input$exclude_groups %||% character(0)
-  
-    if (length(exclude_groups) > 0) {
-      group_levels <- group_levels[
-        !group_levels %in% exclude_groups
-      ]
-    }
   
     edited_group_labels <- vapply(
       seq_along(group_levels),
@@ -118,16 +134,10 @@ make_plot_code <- function(input, dat) {
   if (has_facet) {
   
     facet_levels <- unique(
-      as.character(dat[[facet_var]])
+      as.character(filtered_dat[[facet_var]])
     )
   
     facet_levels <- facet_levels[!is.na(facet_levels)]
-  
-    if (length(exclude_facets) > 0) {
-      facet_levels <- facet_levels[
-        !facet_levels %in% exclude_facets
-      ]
-    }
   
     edited_facet_labels <- vapply(
       seq_along(facet_levels),
@@ -152,6 +162,10 @@ make_plot_code <- function(input, dat) {
   
   if (!has_x && !has_y) {
     return("# Select at least one X or Y variable.")
+  }
+
+  if (nrow(filtered_dat) == 0) {
+    return("# No observations remain after applying the exclusions.")
   }
   
   quote_r <- function(x) {
@@ -352,7 +366,20 @@ make_plot_code <- function(input, dat) {
       )
     }
     
-    if (input$plot_type %in% c("Boxplot", "Line plot") && has_group) {
+    if (input$plot_type == "Boxplot" && has_group) {
+      aes_parts <- c(
+        aes_parts,
+        paste0(
+          "group = interaction(",
+          x_expr,
+          ", ",
+          group_expr,
+          ", drop = TRUE)"
+        )
+      )
+    }
+
+    if (input$plot_type == "Line plot" && has_group) {
       aes_parts <- c(
         aes_parts,
         paste0("group = ", group_expr)
@@ -372,6 +399,16 @@ make_plot_code <- function(input, dat) {
   # ----- add plot layers -----
   
   if (input$plot_type == "Histogram") {
+
+    histogram_is_numeric <- if (has_x) {
+      !isTRUE(input$x_as_factor) && is.numeric(filtered_dat[[x_var]])
+    } else {
+      has_y && is.numeric(filtered_dat[[y_var]])
+    }
+
+    if (!histogram_is_numeric) {
+      return("# Histogram requires a numeric X or Y variable.")
+    }
     
     if (has_group) {
       lines <- c(
@@ -388,6 +425,10 @@ make_plot_code <- function(input, dat) {
     }
     
     if (!has_y) {
+      return("# Bar plot requires a numeric Y variable.")
+    }
+
+    if (!is.numeric(filtered_dat[[y_var]])) {
       return("# Bar plot requires a numeric Y variable.")
     }
     
@@ -426,7 +467,8 @@ make_plot_code <- function(input, dat) {
         "  geom_point(",
         "    position = position_jitterdodge(",
         "      jitter.width = 0.08,",
-        "      dodge.width = 0.75",
+        "      dodge.width = 0.75,",
+        "      seed = 123",
         "    ),",
         "    size = 1.5, alpha = 0.3",
         "  )"
@@ -437,7 +479,7 @@ make_plot_code <- function(input, dat) {
         "p <- p +",
         "  geom_boxplot() +",
         "  geom_point(",
-        "    position = position_jitter(width = 0.08),",
+        "    position = position_jitter(width = 0.08, seed = 123),",
         "    size = 1.5, alpha = 0.3",
         "  )"
       )
@@ -527,21 +569,9 @@ if (has_facet) {
   has_y_limits <- !is.na(y_min) || !is.na(y_max)
   
   # X can be limited only when its displayed scale is numeric
-  can_limit_x <- (
-    has_x &&
-      !isTRUE(input$x_as_factor) &&
-      is.numeric(dat[[x_var]])
-  ) ||
-    (
-      !has_x &&
-        input$plot_type == "Histogram" &&
-        has_y &&
-        is.numeric(dat[[y_var]])
-    ) ||
-    (
-      !has_x &&
-        input$plot_type %in% c("Scatterplot", "Line plot")
-    )
+  can_limit_x <- has_x &&
+    !isTRUE(input$x_as_factor) &&
+    is.numeric(filtered_dat[[x_var]])
   
   num_code <- function(x) {
     if (is.na(x)) "NA" else format(x, trim = TRUE, scientific = FALSE)
@@ -616,8 +646,6 @@ if (has_facet) {
       y_var
     }
     
-  } else if (isTRUE(input$x_as_factor)) {
-    paste0(x_var, " (factor)")
   } else {
     x_var
   }
@@ -628,8 +656,8 @@ if (has_facet) {
     y_var
   }
   
-  x_label_custom <- trimws(input$x_label_custom %||% "")
-  y_label_custom <- trimws(input$y_label_custom %||% "")
+  x_label_custom <- input$x_label_custom %||% ""
+  y_label_custom <- input$y_label_custom %||% ""
   
   if (nzchar(x_label_custom)) {
     x_label <- x_label_custom

@@ -235,39 +235,8 @@ server <- function(input, output, session) {
   
   # ---------- create plot ----------
   plot_data <- reactive({
-    
     req(input$file)
-    
-    dat <- uploaded_data()
-    
-    x_var <- input$x_var %||% "None"
-    group_var <- input$group_var %||% "None"
-    facet_var <- input$facet_var %||% "None"
-    
-    has_x <- x_var != "None" && x_var %in% names(dat)
-    has_group <- group_var != "None" && group_var %in% names(dat)
-    has_facet <- facet_var != "None" && facet_var %in% names(dat)
-    
-    exclude_x_levels <- input$exclude_x_levels %||% character(0)
-    exclude_groups <- input$exclude_groups %||% character(0)
-    exclude_facets <- input$exclude_facets %||% character(0)
-    
-    # Remove selected X levels only when X is treated as categorical
-    if (has_x && isTRUE(input$x_as_factor) && length(exclude_x_levels) > 0) {
-      dat <- dat|> dplyr::filter(!as.character(.data[[x_var]]) %in% exclude_x_levels)
-    }
-    
-    # Remove selected group levels
-    if (has_group && length(exclude_groups) > 0) {
-      dat <- dat|> dplyr::filter(!as.character(.data[[group_var]]) %in% exclude_groups)
-    }
-
-    # Exclude selected facet levels
-    if (has_facet && length(exclude_facets) > 0) {
-      dat <- dat|> dplyr::filter(!as.character(.data[[facet_var]]) %in% exclude_facets)
-    }
-    
-    dat
+    filter_plot_data(input, uploaded_data())
   })
 
   # ---------- X-axis level name change ----------
@@ -558,44 +527,6 @@ server <- function(input, output, session) {
     has_y <- y_var != "None" && y_var %in% names(dat)
     has_group <- group_var != "None" && group_var %in% names(dat)
     has_facet <- facet_var != "None" && facet_var %in% names(dat)
-    
-    # Remove selected X levels before converting X to a factor
-    exclude_x_levels <- input$exclude_x_levels %||% character(0)
-    
-    if (has_x &&
-        isTRUE(input$x_as_factor) &&
-        length(exclude_x_levels) > 0) {
-      
-      dat <- dat[
-        !as.character(dat[[x_var]]) %in% exclude_x_levels,
-        ,
-        drop = FALSE
-      ]
-    }
-    
-    # Remove selected group levels
-    exclude_groups <- input$exclude_groups %||% character(0)
-    
-    if (has_group && length(exclude_groups) > 0) {
-      
-      dat <- dat[
-        !as.character(dat[[group_var]]) %in% exclude_groups,
-        ,
-        drop = FALSE
-      ]
-    }
-
-    # Remove selected facet levels
-    exclude_facets <- input$exclude_facets %||% character(0)
-    
-    if (has_facet && length(exclude_facets) > 0) {
-      
-      dat <- dat[
-        !as.character(dat[[facet_var]]) %in% exclude_facets,
-        ,
-        drop = FALSE
-      ]
-    }
 
     validate(need(nrow(dat) > 0, "No observations remain after applying the exclusions."))
     
@@ -714,63 +645,58 @@ server <- function(input, output, session) {
       validate(
         need(has_y, "Boxplot requires a Y variable.")
       )
-      
+
       if (!has_x) {
-        
         dat$.single_box <- "All data"
-        
-        if (!has_group) {
-          
-          p <- ggplot(
-            dat,
-            aes(
-              x = .data[[".single_box"]],
-              y = .data[[y_var]]
-            )
-          ) +
-            geom_boxplot()
-          
-        } else {
-          
-          p <- ggplot(
-            dat,
-            aes(
-              x = .data[[".single_box"]],
-              y = .data[[y_var]],
-              color = .data[[group_var_plot]]
-            )
-          ) +
-            geom_boxplot()
-        }
-        
+        box_x_var <- ".single_box"
       } else {
-        
-        if (!has_group) {
-          
-          p <- ggplot(
-            dat,
-            aes(
-              x = .data[[x_var_plot]],
-              y = .data[[y_var]]
+        box_x_var <- x_var_plot
+      }
+
+      if (has_group) {
+        p <- ggplot(
+          dat,
+          aes(
+            x = .data[[box_x_var]],
+            y = .data[[y_var]],
+            color = .data[[group_var_plot]],
+            group = interaction(
+              .data[[box_x_var]],
+              .data[[group_var_plot]],
+              drop = TRUE
             )
+          )
+        ) +
+          geom_boxplot(
+            position = position_dodge(width = 0.75)
           ) +
-            geom_boxplot()
-          
-        } else {
-          
-          p <- ggplot(
-            dat,
-            aes(
-              x = .data[[x_var_plot]],
-              y = .data[[y_var]],
-              color = .data[[group_var_plot]]
-            )
-          ) +
-            geom_boxplot() 
-        }
-      } 
-      p <- p+ geom_point(position = position_jitterdodge(jitter.width = 0.08,dodge.width = 0.75),
-                         size = 1.5,alpha = 0.3)
+          geom_point(
+            position = position_jitterdodge(
+              jitter.width = 0.08,
+              dodge.width = 0.75,
+              seed = 123
+            ),
+            size = 1.5,
+            alpha = 0.3
+          )
+      } else {
+        p <- ggplot(
+          dat,
+          aes(
+            x = .data[[box_x_var]],
+            y = .data[[y_var]]
+          )
+        ) +
+          geom_boxplot() +
+          geom_point(
+            position = position_jitter(
+              width = 0.08,
+              seed = 123
+            ),
+            size = 1.5,
+            alpha = 0.3
+          )
+      }
     }
     
     # ---------- scatterplot ----------
@@ -898,12 +824,7 @@ server <- function(input, output, session) {
       }
       
     } else {
-      
-      if (isTRUE(input$x_as_factor)) {
-        x_var
-      } else {
-        x_var
-      }
+      x_var
     }
     
     y_label <- if (input$plot_type == "Histogram") {
@@ -912,12 +833,15 @@ server <- function(input, output, session) {
       y_var
     }
     
-    if (nzchar(input$x_label_custom %||% "")) {
-      x_label <- input$x_label_custom
+    x_label_custom <- input$x_label_custom %||% ""
+    y_label_custom <- input$y_label_custom %||% ""
+
+    if (nzchar(x_label_custom)) {
+      x_label <- x_label_custom
     }
     
-    if (nzchar(input$y_label_custom %||% "")) {
-      y_label <- input$y_label_custom
+    if (nzchar(y_label_custom)) {
+      y_label <- y_label_custom
     }
     
     # ---------- legend title ----------
