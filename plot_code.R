@@ -463,11 +463,10 @@ make_plot_code <- function(input, dat) {
       lines <- c(
         lines,
         "p <- p +",
-        "  geom_boxplot(position = position_dodge(width = 0.75)) +",
+        "  geom_boxplot() +",
         "  geom_point(",
         "    position = position_jitterdodge(",
         "      jitter.width = 0.08,",
-        "      dodge.width = 0.75,",
         "      seed = 123",
         "    ),",
         "    size = 1.5, alpha = 0.3",
