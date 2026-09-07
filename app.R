@@ -24,6 +24,36 @@ source("ui.R")
 
 server <- function(input, output, session) {
 
+  # ---------- keep download dimensions aligned with the preview ----------
+
+  observe({
+    preview_width <- session$clientData$output_plot_width
+    preview_height <- session$clientData$output_plot_height
+
+    req(
+      length(preview_width) == 1,
+      length(preview_height) == 1,
+      is.finite(preview_width),
+      is.finite(preview_height),
+      preview_width > 0,
+      preview_height > 0
+    )
+
+    preview_resolution <- 72
+
+    updateNumericInput(
+      session,
+      "plot_width",
+      value = round(preview_width / preview_resolution, 2)
+    )
+
+    updateNumericInput(
+      session,
+      "plot_height",
+      value = round(preview_height / preview_resolution, 2)
+    )
+  })
+
   # ---------- Excel sheet selection ----------
 
   is_excel_file <- reactive({
@@ -919,13 +949,17 @@ server <- function(input, output, session) {
         p <- p +
           scale_color_discrete(
             name = legend_title,
+            limits = names(legend_labels),
             breaks = names(legend_labels),
-            labels = unname(legend_labels)
+            labels = unname(legend_labels),
+            drop = FALSE
           ) +
           scale_fill_discrete(
             name = legend_title,
+            limits = names(legend_labels),
             breaks = names(legend_labels),
-            labels = unname(legend_labels)
+            labels = unname(legend_labels),
+            drop = FALSE
           )
       }
     }

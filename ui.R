@@ -440,7 +440,7 @@ ui <- page_navbar(
                   label = "Width (inches)",
                   value = 7,
                   min = 1,
-                  step = 0.5
+                  step = 0.1
                 )
               ),
               
@@ -452,10 +452,21 @@ ui <- page_navbar(
                   label = "Height (inches)",
                   value = 5,
                   min = 1,
-                  step = 0.5
+                  step = 0.1
                 )
               )
             ),
+
+            tags$small(
+              paste(
+                "Width and height follow the current plot preview",
+                "and update when the window changes."
+              ),
+              class = "text-muted"
+            ),
+
+            tags$br(),
+            tags$br(),
             
             numericInput(
               inputId = "plot_dpi",

@@ -703,8 +703,10 @@ if (has_facet) {
         "",
         "p <- p + scale_fill_discrete(",
         paste0("  name = ", quote_r(legend_title), ","),
+        paste0("  limits = c(", breaks_code, "),"),
         paste0("  breaks = c(", breaks_code, "),"),
-        paste0("  labels = c(", labels_code, ")"),
+        paste0("  labels = c(", labels_code, "),"),
+        "  drop = FALSE",
         ")"
       )
       
@@ -714,8 +716,10 @@ if (has_facet) {
         "",
         "p <- p + scale_color_discrete(",
         paste0("  name = ", quote_r(legend_title), ","),
+        paste0("  limits = c(", breaks_code, "),"),
         paste0("  breaks = c(", breaks_code, "),"),
-        paste0("  labels = c(", labels_code, ")"),
+        paste0("  labels = c(", labels_code, "),"),
+        "  drop = FALSE",
         ")"
       )
     }
