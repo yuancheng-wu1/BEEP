@@ -22,7 +22,7 @@ missing_condition <- list(
   list(variable = "gender", operator = "is_missing", value = NULL, join = "AND")
 )
 stopifnot(identical(apply_general_filters(dat, missing_condition)$Y, 5L))
-missing_code <- make_general_filter_code(dat, missing_condition, data_name = ".data")
+missing_code <- make_general_filter_code(dat, missing_condition)
 missing_code_result <- eval(parse(text = paste0("dplyr::filter(dat, ", missing_code, ")")))
 stopifnot(identical(missing_code_result$Y, 5L))
 
@@ -47,7 +47,7 @@ stopifnot(all(c("equals", "does not equal", ">", ">=", "<", "<=") %in% numeric_o
 
 stopifnot(identical(apply_general_filters(dat, list()), dat))
 
-filter_code <- make_general_filter_code(dat, conditions, data_name = ".data")
+filter_code <- make_general_filter_code(dat, conditions)
 code_result <- eval(parse(text = paste0("dplyr::filter(dat, ", filter_code, ")")))
 stopifnot(identical(code_result$Y, filtered$Y))
 
@@ -76,13 +76,55 @@ plot_input <- list(
 )
 
 plot_code <- make_plot_code(plot_input, dat, conditions)
-stopifnot(grepl("plot_data <- plot_data %>%", plot_code, fixed = TRUE))
+stopifnot(grepl("plot_data <- dat %>%", plot_code, fixed = TRUE))
 stopifnot(grepl("  filter(", plot_code, fixed = TRUE))
-stopifnot(!grepl("!is.na(.data[[\"score\"]])", plot_code, fixed = TRUE))
+stopifnot(grepl("aes(x = X, y = Y)", plot_code, fixed = TRUE))
+stopifnot(!grepl(".data[[", plot_code, fixed = TRUE))
+stopifnot(!grepl("x_var <-", plot_code, fixed = TRUE))
+stopifnot(!grepl("y_var <-", plot_code, fixed = TRUE))
+stopifnot(!grepl("Filters created in BEEP", plot_code, fixed = TRUE))
+stopifnot(!grepl("!is.na(score)", plot_code, fixed = TRUE))
+stopifnot(identical(r_column_name("a b"), "`a b`"))
 
 plot_environment <- new.env(parent = globalenv())
 plot_environment$dat <- dat
 generated_plot <- eval(parse(text = plot_code), envir = plot_environment)
 stopifnot(inherits(generated_plot, "ggplot"))
+
+plot_cases <- list(
+  utils::modifyList(plot_input, list(
+    plot_type = "Histogram", x_var = "score", y_var = "None"
+  )),
+  utils::modifyList(plot_input, list(
+    plot_type = "Bar plot", x_as_factor = TRUE, group_var = "gender"
+  )),
+  utils::modifyList(plot_input, list(
+    plot_type = "Boxplot", x_as_factor = TRUE, group_var = "gender"
+  )),
+  utils::modifyList(plot_input, list(
+    plot_type = "Line plot", group_var = "gender"
+  ))
+)
+
+for (case_input in plot_cases) {
+  case_code <- make_plot_code(case_input, dat, conditions)
+  case_environment <- new.env(parent = globalenv())
+  case_environment$dat <- dat
+  case_plot <- eval(parse(text = case_code), envir = case_environment)
+  stopifnot(inherits(case_plot, "ggplot"))
+  stopifnot(!grepl(".data[[", case_code, fixed = TRUE))
+}
+
+nonstandard_dat <- data.frame(check.names = FALSE, "Series length" = 1:3, "Outcome score" = 4:6)
+nonstandard_input <- utils::modifyList(plot_input, list(
+  x_var = "Series length",
+  y_var = "Outcome score"
+))
+nonstandard_code <- make_plot_code(nonstandard_input, nonstandard_dat)
+stopifnot(grepl("aes(x = `Series length`, y = `Outcome score`)", nonstandard_code, fixed = TRUE))
+nonstandard_environment <- new.env(parent = globalenv())
+nonstandard_environment$dat <- nonstandard_dat
+nonstandard_plot <- eval(parse(text = nonstandard_code), envir = nonstandard_environment)
+stopifnot(inherits(nonstandard_plot, "ggplot"))
 
 cat("All filter tests passed.\n")

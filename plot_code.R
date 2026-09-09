@@ -2,6 +2,10 @@
   if (is.null(x)) y else x
 }
 
+r_column_name <- function(x) {
+  paste(deparse(as.name(x), backtick = TRUE), collapse = "")
+}
+
 filter_operator_choices <- function(column) {
   missing_choices <- c(
     "is missing" = "is_missing",
@@ -136,7 +140,7 @@ apply_general_filters <- function(dat, conditions = list()) {
   dat[keep, , drop = FALSE]
 }
 
-make_general_filter_code <- function(dat, conditions = list(), data_name = "plot_data") {
+make_general_filter_code <- function(dat, conditions = list(), data_name = NULL) {
   quote_r <- function(x) paste(deparse(as.character(x)), collapse = "")
 
   condition_code <- lapply(conditions, function(condition) {
@@ -147,7 +151,11 @@ make_general_filter_code <- function(dat, conditions = list(), data_name = "plot
     variable <- condition$variable
     operator <- condition$operator
     column <- dat[[variable]]
-    column_code <- paste0(data_name, "[[", quote_r(variable), "]]")
+    column_code <- if (is.null(data_name)) {
+      r_column_name(variable)
+    } else {
+      paste0(data_name, "[[", quote_r(variable), "]]")
+    }
     join <- toupper(condition$join %||% "AND")
 
     if (operator == "is_missing") {
@@ -197,7 +205,7 @@ make_general_filter_code <- function(dat, conditions = list(), data_name = "plot
     }
 
     list(
-      expression = paste0("(", expression, ")"),
+      expression = expression,
       join = join
     )
   })
@@ -421,18 +429,17 @@ make_plot_code <- function(input, dat, conditions = list()) {
     )
   }
 
-  lines <- c(lines, paste0("plot_data <- ", data_name))
-
-  general_filter_code <- make_general_filter_code(dat, conditions, ".data")
+  general_filter_code <- make_general_filter_code(dat, conditions)
   if (nzchar(general_filter_code)) {
     lines <- c(
       lines,
-      "# Filters created in BEEP (AND is evaluated before OR)",
-      "plot_data <- plot_data %>%",
+      paste0("plot_data <- ", data_name, " %>%"),
       "  filter(",
       paste0("    ", general_filter_code),
       "  )"
     )
+  } else {
+    lines <- c(lines, paste0("plot_data <- ", data_name))
   }
   
   if (has_x &&
@@ -448,7 +455,7 @@ make_plot_code <- function(input, dat, conditions = list()) {
       lines,
       "plot_data <- plot_data %>%",
       paste0(
-        "  filter(!as.character(.data[[", quote_r(x_var), "]]) %in% c(",
+        "  filter(!as.character(", r_column_name(x_var), ") %in% c(",
         excluded_x_text, "))"
       )
     )
@@ -465,7 +472,7 @@ make_plot_code <- function(input, dat, conditions = list()) {
       lines,
       "plot_data <- plot_data %>%",
       paste0(
-        "  filter(!as.character(.data[[", quote_r(group_var), "]]) %in% c(",
+        "  filter(!as.character(", r_column_name(group_var), ") %in% c(",
         excluded_group_text, "))"
       )
     )
@@ -486,79 +493,40 @@ make_plot_code <- function(input, dat, conditions = list()) {
       lines,
       "plot_data <- plot_data %>%",
       paste0(
-        "  filter(!as.character(.data[[", quote_r(facet_var), "]]) %in% c(",
+        "  filter(!as.character(", r_column_name(facet_var), ") %in% c(",
         excluded_facet_text, "))"
       )
     )
   }
- 
-  # ----- prepare variables -----
-  
-  if (has_x) {
-    lines <- c(lines, paste0("x_var <- ", quote_r(x_var)))
-    
-    if (isTRUE(input$x_as_factor)) {
-      lines <- c(
-        lines,
-        "plot_data$.plot_x <- droplevels(factor(plot_data[[x_var]]))",
-        'x_var_plot <- ".plot_x"'
-      )
-    } else {
-      lines <- c(lines, "x_var_plot <- x_var")
-    }
-  }
-  
-  if (has_y) {
-    lines <- c(lines, paste0("y_var <- ", quote_r(y_var)))
-  }
-  
-  if (has_group) {
-    lines <- c(
-      lines,
-      paste0("group_var <- ", quote_r(group_var)),
-      "plot_data$.plot_group <- droplevels(factor(plot_data[[group_var]]))",
-      'group_var_plot <- ".plot_group"'
-    )
-  }
-  
-  if (has_facet) {
-    lines <- c(
-      lines,
-      paste0("facet_var <- ", quote_r(facet_var)),
-      "plot_data$.plot_facet <- droplevels(factor(plot_data[[facet_var]]))",
-      'facet_var_plot <- ".plot_facet"'
-    )
-  }
-  
+
   lines <- c(lines, "")
-  
+ 
   # ----- determine X expression -----
   
   if (has_x) {
-    x_expr <- ".data[[x_var_plot]]"
+    x_name <- r_column_name(x_var)
+    x_expr <- if (isTRUE(input$x_as_factor)) {
+      paste0("factor(", x_name, ")")
+    } else {
+      x_name
+    }
     
   } else if (input$plot_type == "Boxplot") {
-    lines <- c(
-      lines,
-      'plot_data$.single_box <- "All data"',
-      ""
-    )
-    x_expr <- '.data[[".single_box"]]'
+    x_expr <- '"All data"'
     
   } else if (input$plot_type %in% c("Scatterplot", "Line plot")) {
-    lines <- c(
-      lines,
-      "plot_data$.plot_index <- seq_len(nrow(plot_data))",
-      ""
-    )
-    x_expr <- '.data[[".plot_index"]]'
+    x_expr <- "seq_len(nrow(plot_data))"
     
   } else {
-    x_expr <- ".data[[y_var]]"
+    x_expr <- r_column_name(y_var)
   }
   
-  y_expr <- ".data[[y_var]]"
-  group_expr <- ".data[[group_var_plot]]"
+  y_expr <- if (has_y) r_column_name(y_var) else "NULL"
+  group_expr <- if (has_group) {
+    paste0("factor(", r_column_name(group_var), ")")
+  } else {
+    "NULL"
+  }
   
   # ----- define aesthetics -----
   
@@ -772,7 +740,7 @@ if (has_facet) {
         ")"
       ),
       "p <- p + facet_wrap(",
-      "  vars(.data[[facet_var_plot]]),",
+      paste0("  vars(", r_column_name(facet_var), "),"),
       "  labeller = as_labeller(facet_labels)",
       ")"
     )
@@ -781,7 +749,7 @@ if (has_facet) {
 
     lines <- c(
       lines,
-      "p <- p + facet_wrap(vars(.data[[facet_var_plot]]))"
+      paste0("p <- p + facet_wrap(vars(", r_column_name(facet_var), "))")
     )
   }
 }
