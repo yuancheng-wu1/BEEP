@@ -12,10 +12,10 @@ filter_operator_choices <- function(column) {
     return(c(
       "equals" = "equals",
       "does not equal" = "not_equals",
-      "is greater than" = "greater_than",
-      "is at least" = "greater_equal",
-      "is less than" = "less_than",
-      "is at most" = "less_equal",
+      ">" = "greater_than",
+      ">=" = "greater_equal",
+      "<" = "less_than",
+      "<=" = "less_equal",
       missing_choices
     ))
   }
@@ -183,7 +183,10 @@ make_general_filter_code <- function(dat, conditions = list(), data_name = "plot
       "less_than" = paste(column_code, "<", value_code),
       "less_equal" = paste(column_code, "<=", value_code),
       "contains" = paste0("grepl(", value_code, ", as.character(", column_code, "), fixed = TRUE)"),
-      "not_contains" = paste0("!grepl(", value_code, ", as.character(", column_code, "), fixed = TRUE)"),
+      "not_contains" = paste0(
+        "ifelse(is.na(", column_code, "), NA, !grepl(", value_code,
+        ", as.character(", column_code, "), fixed = TRUE))"
+      ),
       "starts_with" = paste0("startsWith(as.character(", column_code, "), ", value_code, ")"),
       "ends_with" = paste0("endsWith(as.character(", column_code, "), ", value_code, ")"),
       NULL
@@ -194,9 +197,7 @@ make_general_filter_code <- function(dat, conditions = list(), data_name = "plot
     }
 
     list(
-      expression = paste0(
-        "(!is.na(", column_code, ") & (", expression, ")) %in% TRUE"
-      ),
+      expression = paste0("(", expression, ")"),
       join = join
     )
   })
@@ -404,6 +405,7 @@ make_plot_code <- function(input, dat, conditions = list()) {
   
   lines <- c(
     "library(ggplot2)",
+    "library(dplyr)",
     ""
   )
 
@@ -421,16 +423,15 @@ make_plot_code <- function(input, dat, conditions = list()) {
 
   lines <- c(lines, paste0("plot_data <- ", data_name))
 
-  general_filter_code <- make_general_filter_code(dat, conditions, "plot_data")
+  general_filter_code <- make_general_filter_code(dat, conditions, ".data")
   if (nzchar(general_filter_code)) {
     lines <- c(
       lines,
       "# Filters created in BEEP (AND is evaluated before OR)",
-      paste0(
-        "plot_data <- plot_data[",
-        general_filter_code,
-        ", , drop = FALSE]"
-      )
+      "plot_data <- plot_data %>%",
+      "  filter(",
+      paste0("    ", general_filter_code),
+      "  )"
     )
   }
   
@@ -445,13 +446,10 @@ make_plot_code <- function(input, dat, conditions = list()) {
     
     lines <- c(
       lines,
+      "plot_data <- plot_data %>%",
       paste0(
-        "plot_data <- plot_data[!",
-        "as.character(plot_data[[",
-        quote_r(x_var),
-        "]]) %in% c(",
-        excluded_x_text,
-        "), , drop = FALSE]"
+        "  filter(!as.character(.data[[", quote_r(x_var), "]]) %in% c(",
+        excluded_x_text, "))"
       )
     )
   }
@@ -465,13 +463,10 @@ make_plot_code <- function(input, dat, conditions = list()) {
     
     lines <- c(
       lines,
+      "plot_data <- plot_data %>%",
       paste0(
-        "plot_data <- plot_data[!",
-        "as.character(plot_data[[",
-        quote_r(group_var),
-        "]]) %in% c(",
-        excluded_group_text,
-        "), , drop = FALSE]"
+        "  filter(!as.character(.data[[", quote_r(group_var), "]]) %in% c(",
+        excluded_group_text, "))"
       )
     )
   }
@@ -489,13 +484,10 @@ make_plot_code <- function(input, dat, conditions = list()) {
     
     lines <- c(
       lines,
+      "plot_data <- plot_data %>%",
       paste0(
-        "plot_data <- plot_data[",
-        "!as.character(plot_data[[",
-        quote_r(facet_var),
-        "]]) %in% c(",
-        excluded_facet_text,
-        "), , drop = FALSE]"
+        "  filter(!as.character(.data[[", quote_r(facet_var), "]]) %in% c(",
+        excluded_facet_text, "))"
       )
     )
   }

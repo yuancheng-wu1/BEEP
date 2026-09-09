@@ -35,6 +35,9 @@ shiny::testServer(server, {
 
   stopifnot(identical(as.numeric(general_filtered_data()$Y), c(1, 2, 6)))
   stopifnot(grepl(" | ", make_general_filter_code(uploaded_data(), filter_conditions()), fixed = TRUE))
+  filter_ui <- output$filter_conditions_ui$html
+  stopifnot(grepl("value=\"80\"", filter_ui, fixed = TRUE))
+  stopifnot(grepl("value=\"70\"", filter_ui, fixed = TRUE))
 
   session$setInputs(data_preview_source = "filtered")
   stopifnot(grepl(

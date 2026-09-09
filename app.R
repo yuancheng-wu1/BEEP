@@ -178,31 +178,24 @@ server <- function(input, output, session) {
       if (!selected_operator %in% c("is_missing", "not_missing")) {
         column <- dat[[selected_variable]]
         current_value <- isolate(input[[value_id]])
+        values <- sort(unique(column[!is.na(column)]))
+        values <- as.character(values)
+        fallback_value <- if (length(values) > 0) values[1] else ""
+        default_value <- as.character(current_value %||% fallback_value)
+        if (length(default_value) == 0 || is.na(default_value)) default_value <- ""
+        value_choices <- unique(c(values, default_value[nzchar(default_value)]))
 
-        if (is.numeric(column)) {
-          default_value <- suppressWarnings(as.numeric(current_value %||% 0))
-          if (is.na(default_value)) default_value <- 0
-          value_control <- numericInput(value_id, "Value", value = default_value)
-        } else if (inherits(column, "Date")) {
-          available_dates <- column[!is.na(column)]
-          fallback_date <- if (length(available_dates) > 0) min(available_dates) else Sys.Date()
-          default_value <- suppressWarnings(as.Date(current_value %||% fallback_date))
-          if (length(default_value) == 0 || is.na(default_value)) default_value <- Sys.Date()
-          value_control <- dateInput(value_id, "Value", value = default_value)
-        } else {
-          values <- sort(unique(as.character(column)))
-          values <- values[!is.na(values)]
-          fallback_value <- if (length(values) > 0) values[1] else ""
-          default_value <- as.character(current_value %||% fallback_value)
-          if (length(default_value) == 0 || is.na(default_value)) default_value <- ""
-          value_control <- selectizeInput(
-            value_id,
-            "Value",
-            choices = values,
-            selected = default_value,
-            options = list(create = TRUE, persist = FALSE)
+        value_control <- selectizeInput(
+          value_id,
+          "Value",
+          choices = value_choices,
+          selected = default_value,
+          options = list(
+            create = TRUE,
+            persist = FALSE,
+            placeholder = "Choose an existing value or type a new one"
           )
-        }
+        )
       }
 
       join_control <- if (position > 1) {

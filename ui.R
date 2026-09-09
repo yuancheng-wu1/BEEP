@@ -266,7 +266,10 @@ ui <- page_navbar(
             tags$hr(),
             tags$strong("Filter rows (optional)"),
             tags$p(
-              "Use all rows by default. AND is evaluated before OR.",
+              paste(
+                "Use all rows by default. Choose an observed value or type a new one.",
+                "AND is evaluated before OR."
+              ),
               class = "text-muted small mb-2"
             ),
             uiOutput("filter_conditions_ui"),
