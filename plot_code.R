@@ -2,7 +2,231 @@
   if (is.null(x)) y else x
 }
 
-filter_plot_data <- function(input, dat) {
+filter_operator_choices <- function(column) {
+  missing_choices <- c(
+    "is missing" = "is_missing",
+    "is not missing" = "not_missing"
+  )
+
+  if (is.numeric(column) || inherits(column, c("Date", "POSIXt"))) {
+    return(c(
+      "equals" = "equals",
+      "does not equal" = "not_equals",
+      "is greater than" = "greater_than",
+      "is at least" = "greater_equal",
+      "is less than" = "less_than",
+      "is at most" = "less_equal",
+      missing_choices
+    ))
+  }
+
+  c(
+    "equals" = "equals",
+    "does not equal" = "not_equals",
+    "contains" = "contains",
+    "does not contain" = "not_contains",
+    "starts with" = "starts_with",
+    "ends with" = "ends_with",
+    missing_choices
+  )
+}
+
+evaluate_filter_condition <- function(dat, condition) {
+  variable <- condition$variable %||% ""
+  operator <- condition$operator %||% ""
+
+  if (!nzchar(variable) || !variable %in% names(dat) || !nzchar(operator)) {
+    return(NULL)
+  }
+
+  column <- dat[[variable]]
+  missing_values <- is.na(column)
+
+  if (operator == "is_missing") {
+    return(is.na(column))
+  }
+
+  if (operator == "not_missing") {
+    return(!is.na(column))
+  }
+
+  value <- condition$value
+  if (is.null(value) || length(value) == 0 || is.na(value[1]) ||
+      !nzchar(trimws(as.character(value[1])))) {
+    return(NULL)
+  }
+
+  if (is.numeric(column)) {
+    comparison_value <- suppressWarnings(as.numeric(value[1]))
+    if (is.na(comparison_value)) {
+      return(NULL)
+    }
+  } else if (inherits(column, "Date")) {
+    comparison_value <- suppressWarnings(as.Date(value[1]))
+    if (is.na(comparison_value)) {
+      return(NULL)
+    }
+  } else if (inherits(column, "POSIXt")) {
+    comparison_value <- suppressWarnings(as.POSIXct(value[1]))
+    if (is.na(comparison_value)) {
+      return(NULL)
+    }
+  } else {
+    column <- as.character(column)
+    comparison_value <- as.character(value[1])
+  }
+
+  result <- switch(
+    operator,
+    "equals" = column == comparison_value,
+    "not_equals" = column != comparison_value,
+    "greater_than" = column > comparison_value,
+    "greater_equal" = column >= comparison_value,
+    "less_than" = column < comparison_value,
+    "less_equal" = column <= comparison_value,
+    "contains" = grepl(comparison_value, column, fixed = TRUE),
+    "not_contains" = !grepl(comparison_value, column, fixed = TRUE),
+    "starts_with" = startsWith(column, comparison_value),
+    "ends_with" = endsWith(column, comparison_value),
+    NULL
+  )
+
+  if (is.null(result)) {
+    return(NULL)
+  }
+
+  result[is.na(result)] <- FALSE
+  result[missing_values] <- FALSE
+  result
+}
+
+apply_general_filters <- function(dat, conditions = list()) {
+  if (length(conditions) == 0) {
+    return(dat)
+  }
+
+  valid_conditions <- lapply(conditions, function(condition) {
+    condition$result <- evaluate_filter_condition(dat, condition)
+    condition
+  })
+  valid_conditions <- Filter(function(condition) !is.null(condition$result), valid_conditions)
+
+  if (length(valid_conditions) == 0) {
+    return(dat)
+  }
+
+  # AND binds more tightly than OR: build AND groups, then OR their results.
+  group_results <- list(valid_conditions[[1]]$result)
+
+  if (length(valid_conditions) > 1) {
+    for (i in 2:length(valid_conditions)) {
+      join <- toupper(valid_conditions[[i]]$join %||% "AND")
+
+      if (join == "OR") {
+        group_results[[length(group_results) + 1]] <- valid_conditions[[i]]$result
+      } else {
+        last_group <- length(group_results)
+        group_results[[last_group]] <-
+          group_results[[last_group]] & valid_conditions[[i]]$result
+      }
+    }
+  }
+
+  keep <- Reduce(`|`, group_results)
+  dat[keep, , drop = FALSE]
+}
+
+make_general_filter_code <- function(dat, conditions = list(), data_name = "plot_data") {
+  quote_r <- function(x) paste(deparse(as.character(x)), collapse = "")
+
+  condition_code <- lapply(conditions, function(condition) {
+    if (is.null(evaluate_filter_condition(dat, condition))) {
+      return(NULL)
+    }
+
+    variable <- condition$variable
+    operator <- condition$operator
+    column <- dat[[variable]]
+    column_code <- paste0(data_name, "[[", quote_r(variable), "]]")
+    join <- toupper(condition$join %||% "AND")
+
+    if (operator == "is_missing") {
+      return(list(
+        expression = paste0("is.na(", column_code, ")"),
+        join = join
+      ))
+    }
+    if (operator == "not_missing") {
+      return(list(
+        expression = paste0("!is.na(", column_code, ")"),
+        join = join
+      ))
+    }
+
+    raw_value <- condition$value[1]
+    value_code <- if (is.numeric(column)) {
+      format(as.numeric(raw_value), trim = TRUE, scientific = FALSE)
+    } else if (inherits(column, "Date")) {
+      paste0("as.Date(", quote_r(raw_value), ")")
+    } else if (inherits(column, "POSIXt")) {
+      paste0("as.POSIXct(", quote_r(raw_value), ")")
+    } else {
+      quote_r(raw_value)
+    }
+
+    expression <- switch(
+      operator,
+      "equals" = paste(column_code, "==", value_code),
+      "not_equals" = paste(column_code, "!=", value_code),
+      "greater_than" = paste(column_code, ">", value_code),
+      "greater_equal" = paste(column_code, ">=", value_code),
+      "less_than" = paste(column_code, "<", value_code),
+      "less_equal" = paste(column_code, "<=", value_code),
+      "contains" = paste0("grepl(", value_code, ", as.character(", column_code, "), fixed = TRUE)"),
+      "not_contains" = paste0("!grepl(", value_code, ", as.character(", column_code, "), fixed = TRUE)"),
+      "starts_with" = paste0("startsWith(as.character(", column_code, "), ", value_code, ")"),
+      "ends_with" = paste0("endsWith(as.character(", column_code, "), ", value_code, ")"),
+      NULL
+    )
+
+    if (is.null(expression)) {
+      return(NULL)
+    }
+
+    list(
+      expression = paste0(
+        "(!is.na(", column_code, ") & (", expression, ")) %in% TRUE"
+      ),
+      join = join
+    )
+  })
+  condition_code <- Filter(Negate(is.null), condition_code)
+
+  if (length(condition_code) == 0) {
+    return("")
+  }
+
+  groups <- list(condition_code[[1]]$expression)
+  if (length(condition_code) > 1) {
+    for (i in 2:length(condition_code)) {
+      if (condition_code[[i]]$join == "OR") {
+        groups[[length(groups) + 1]] <- condition_code[[i]]$expression
+      } else {
+        last_group <- length(groups)
+        groups[[last_group]] <- paste(
+          groups[[last_group]],
+          condition_code[[i]]$expression,
+          sep = " & "
+        )
+      }
+    }
+  }
+
+  paste(vapply(groups, function(group) paste0("(", group, ")"), character(1)), collapse = " | ")
+}
+
+filter_plot_data <- function(input, dat, conditions = list()) {
+  dat <- apply_general_filters(dat, conditions)
   x_var <- input$x_var %||% "None"
   group_var <- input$group_var %||% "None"
   facet_var <- input$facet_var %||% "None"
@@ -42,7 +266,7 @@ filter_plot_data <- function(input, dat) {
   dat
 }
 
-make_plot_code <- function(input, dat) {
+make_plot_code <- function(input, dat, conditions = list()) {
   
   x_var <- input$x_var %||% "None"
   y_var <- input$y_var %||% "None"
@@ -63,7 +287,7 @@ make_plot_code <- function(input, dat) {
   exclude_x_levels <- input$exclude_x_levels %||% character(0)
   exclude_groups <- input$exclude_groups %||% character(0)
   exclude_facets <- input$exclude_facets %||% character(0)
-  filtered_dat <- filter_plot_data(input, dat)
+  filtered_dat <- filter_plot_data(input, dat, conditions)
 
   x_is_discrete <- has_x &&
     (
@@ -165,7 +389,7 @@ make_plot_code <- function(input, dat) {
   }
 
   if (nrow(filtered_dat) == 0) {
-    return("# No observations remain after applying the exclusions.")
+    return("# No observations remain after applying the filters and exclusions.")
   }
   
   quote_r <- function(x) {
@@ -196,6 +420,19 @@ make_plot_code <- function(input, dat) {
   }
 
   lines <- c(lines, paste0("plot_data <- ", data_name))
+
+  general_filter_code <- make_general_filter_code(dat, conditions, "plot_data")
+  if (nzchar(general_filter_code)) {
+    lines <- c(
+      lines,
+      "# Filters created in BEEP (AND is evaluated before OR)",
+      paste0(
+        "plot_data <- plot_data[",
+        general_filter_code,
+        ", , drop = FALSE]"
+      )
+    )
+  }
   
   if (has_x &&
       isTRUE(input$x_as_factor) &&

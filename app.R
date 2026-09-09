@@ -114,6 +114,196 @@ server <- function(input, output, session) {
       )
     }
   })
+
+  # ---------- general row filters ----------
+
+  filter_condition_ids <- reactiveVal(integer(0))
+  next_filter_condition_id <- reactiveVal(0L)
+
+  observeEvent(uploaded_data(), {
+    filter_condition_ids(integer(0))
+    next_filter_condition_id(0L)
+  }, ignoreInit = TRUE)
+
+  observeEvent(input$add_filter_condition, {
+    req(input$file)
+    new_id <- next_filter_condition_id() + 1L
+    next_filter_condition_id(new_id)
+    filter_condition_ids(c(filter_condition_ids(), new_id))
+  })
+
+  observeEvent(input$remove_filter_condition, {
+    remove_id <- suppressWarnings(as.integer(input$remove_filter_condition))
+    if (!is.na(remove_id)) {
+      filter_condition_ids(setdiff(filter_condition_ids(), remove_id))
+    }
+  })
+
+  observeEvent(input$clear_filter_conditions, {
+    filter_condition_ids(integer(0))
+  })
+
+  output$filter_conditions_ui <- renderUI({
+    if (is.null(input$file)) {
+      return(tags$small("Upload data to add conditions.", class = "text-muted"))
+    }
+
+    ids <- filter_condition_ids()
+    if (length(ids) == 0) {
+      return(tags$small("No filters applied.", class = "text-muted"))
+    }
+
+    dat <- uploaded_data()
+    variable_names <- names(dat)
+
+    tagList(lapply(seq_along(ids), function(position) {
+      id <- ids[position]
+      variable_id <- paste0("filter_variable_", id)
+      operator_id <- paste0("filter_operator_", id)
+      value_id <- paste0("filter_value_", id)
+      join_id <- paste0("filter_join_", id)
+
+      selected_variable <- input[[variable_id]] %||% variable_names[1]
+      if (!selected_variable %in% variable_names) {
+        selected_variable <- variable_names[1]
+      }
+
+      operator_choices <- filter_operator_choices(dat[[selected_variable]])
+      selected_operator <- input[[operator_id]] %||% unname(operator_choices[1])
+      if (!selected_operator %in% unname(operator_choices)) {
+        selected_operator <- unname(operator_choices[1])
+      }
+
+      value_control <- NULL
+      if (!selected_operator %in% c("is_missing", "not_missing")) {
+        column <- dat[[selected_variable]]
+        current_value <- isolate(input[[value_id]])
+
+        if (is.numeric(column)) {
+          default_value <- suppressWarnings(as.numeric(current_value %||% 0))
+          if (is.na(default_value)) default_value <- 0
+          value_control <- numericInput(value_id, "Value", value = default_value)
+        } else if (inherits(column, "Date")) {
+          available_dates <- column[!is.na(column)]
+          fallback_date <- if (length(available_dates) > 0) min(available_dates) else Sys.Date()
+          default_value <- suppressWarnings(as.Date(current_value %||% fallback_date))
+          if (length(default_value) == 0 || is.na(default_value)) default_value <- Sys.Date()
+          value_control <- dateInput(value_id, "Value", value = default_value)
+        } else {
+          values <- sort(unique(as.character(column)))
+          values <- values[!is.na(values)]
+          fallback_value <- if (length(values) > 0) values[1] else ""
+          default_value <- as.character(current_value %||% fallback_value)
+          if (length(default_value) == 0 || is.na(default_value)) default_value <- ""
+          value_control <- selectizeInput(
+            value_id,
+            "Value",
+            choices = values,
+            selected = default_value,
+            options = list(create = TRUE, persist = FALSE)
+          )
+        }
+      }
+
+      join_control <- if (position > 1) {
+        div(
+          class = "beep-filter-join",
+          selectInput(
+            join_id,
+            label = NULL,
+            choices = c("AND", "OR"),
+            selected = isolate(input[[join_id]]) %||% "AND"
+          )
+        )
+      } else {
+        NULL
+      }
+
+      tagList(
+        join_control,
+        div(
+          class = "beep-filter-row",
+          fluidRow(
+            column(
+              6,
+              selectInput(
+                variable_id,
+                "Variable",
+                choices = variable_names,
+                selected = selected_variable
+              )
+            ),
+            column(
+              6,
+              selectInput(
+                operator_id,
+                "Requirement",
+                choices = operator_choices,
+                selected = selected_operator
+              )
+            )
+          ),
+          fluidRow(
+            column(10, value_control),
+            column(
+              2,
+              tags$label("Remove", class = "form-label invisible"),
+              actionButton(
+                paste0("remove_filter_", id),
+                label = icon("trash"),
+                class = "btn-outline-danger btn-sm",
+                onclick = paste0(
+                  "Shiny.setInputValue('remove_filter_condition', '",
+                  id,
+                  "', {priority: 'event'})"
+                )
+              )
+            )
+          )
+        )
+      )
+    }))
+  })
+
+  filter_conditions <- reactive({
+    ids <- filter_condition_ids()
+
+    lapply(seq_along(ids), function(position) {
+      id <- ids[position]
+      list(
+        variable = input[[paste0("filter_variable_", id)]] %||% "",
+        operator = input[[paste0("filter_operator_", id)]] %||% "",
+        value = input[[paste0("filter_value_", id)]],
+        join = if (position == 1) {
+          "AND"
+        } else {
+          input[[paste0("filter_join_", id)]] %||% "AND"
+        }
+      )
+    })
+  })
+
+  general_filtered_data <- reactive({
+    req(input$file)
+    apply_general_filters(uploaded_data(), filter_conditions())
+  })
+
+  output$filter_status_ui <- renderUI({
+    if (is.null(input$file)) return(NULL)
+
+    total_rows <- nrow(uploaded_data())
+    filtered_rows <- nrow(general_filtered_data())
+
+    div(
+      class = "beep-filter-status",
+      paste0(
+        format(filtered_rows, big.mark = ","),
+        " of ",
+        format(total_rows, big.mark = ","),
+        " rows included"
+      )
+    )
+  })
   
   # ---------- update variable menus after upload ----------
   
@@ -260,13 +450,46 @@ server <- function(input, output, session) {
       return(data.frame(Message = "No data imported"))
     }
     
-    head(uploaded_data(), 10)
+    preview_data <- if ((input$data_preview_source %||% "full") == "filtered") {
+      general_filtered_data()
+    } else {
+      uploaded_data()
+    }
+
+    head(preview_data, 10)
+  })
+
+  output$data_preview_status_ui <- renderUI({
+    if (is.null(input$file)) return(NULL)
+
+    full_rows <- nrow(uploaded_data())
+    filtered_rows <- nrow(general_filtered_data())
+    selected_source <- input$data_preview_source %||% "full"
+
+    tags$p(
+      if (selected_source == "filtered") {
+        paste0(
+          "Showing the first 10 filtered rows. ",
+          format(filtered_rows, big.mark = ","),
+          " of ",
+          format(full_rows, big.mark = ","),
+          " rows match the current conditions."
+        )
+      } else {
+        paste0(
+          "Showing the first 10 rows of the full dataset (",
+          format(full_rows, big.mark = ","),
+          " rows)."
+        )
+      },
+      class = "text-muted"
+    )
   })
   
   # ---------- create plot ----------
   plot_data <- reactive({
     req(input$file)
-    filter_plot_data(input, uploaded_data())
+    filter_plot_data(input, uploaded_data(), filter_conditions())
   })
 
   # ---------- X-axis level name change ----------
@@ -558,7 +781,7 @@ server <- function(input, output, session) {
     has_group <- group_var != "None" && group_var %in% names(dat)
     has_facet <- facet_var != "None" && facet_var %in% names(dat)
 
-    validate(need(nrow(dat) > 0, "No observations remain after applying the exclusions."))
+    validate(need(nrow(dat) > 0, "No observations remain after applying the filters and exclusions."))
     
     # ---------- temporary plotting variables ----------
     
@@ -1127,7 +1350,8 @@ server <- function(input, output, session) {
     
     make_plot_code(
       input = input,
-      dat = uploaded_data()
+      dat = uploaded_data(),
+      conditions = filter_conditions()
     )
   })
   

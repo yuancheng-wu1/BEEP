@@ -95,6 +95,45 @@ ui <- page_navbar(
         overflow-y: auto;
         white-space: pre-wrap;
       }
+
+      /* General row-filter builder */
+      .beep-filter-row {
+        padding: 0.75rem;
+        margin-bottom: 0.5rem;
+        border: 1px solid #dee2e6;
+        border-radius: 0.45rem;
+        background: #fff;
+      }
+
+      .beep-filter-row .form-group,
+      .beep-filter-join .form-group {
+        margin-bottom: 0.5rem;
+      }
+
+      .beep-filter-join {
+        width: 7rem;
+        margin: 0 auto 0.5rem auto;
+      }
+
+      .beep-filter-actions {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+      }
+
+      .beep-filter-status {
+        margin-top: 0.75rem;
+        padding: 0.65rem 0.75rem;
+        border-radius: 0.4rem;
+        background: #e8f7f3;
+        color: #176b5b;
+      }
+
+      .beep-preview-choice .shiny-options-group {
+        display: flex;
+        gap: 1.5rem;
+        margin-bottom: 0.5rem;
+      }
       
     ")
   ),
@@ -222,7 +261,29 @@ ui <- page_navbar(
             tags$small(
               "Supported formats: csv, xlsx, xls and rds.",
               class = "text-muted"
-            )
+            ),
+
+            tags$hr(),
+            tags$strong("Filter rows (optional)"),
+            tags$p(
+              "Use all rows by default. AND is evaluated before OR.",
+              class = "text-muted small mb-2"
+            ),
+            uiOutput("filter_conditions_ui"),
+            div(
+              class = "beep-filter-actions",
+              actionButton(
+                inputId = "add_filter_condition",
+                label = tagList(icon("plus"), "Add condition"),
+                class = "btn-outline-primary btn-sm"
+              ),
+              actionButton(
+                inputId = "clear_filter_conditions",
+                label = "Clear all",
+                class = "btn-outline-secondary btn-sm"
+              )
+            ),
+            uiOutput("filter_status_ui")
           ),
           
           # ====================================================
@@ -553,12 +614,24 @@ ui <- page_navbar(
           tags$strong("Imported data"),
           
           tags$small(
-            "The first rows of the uploaded dataset are displayed.",
+            "Switch between the original and filtered datasets.",
             class = "text-muted"
           )
         )
       ),
-      
+
+      div(
+        class = "beep-preview-choice",
+        radioButtons(
+          inputId = "data_preview_source",
+          label = NULL,
+          choices = c("Full data" = "full", "Filtered data" = "filtered"),
+          selected = "full",
+          inline = TRUE,
+          width = "100%"
+        )
+      ),
+      uiOutput("data_preview_status_ui"),
       tableOutput("data_preview")
     )
   ),
