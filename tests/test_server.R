@@ -45,6 +45,40 @@ shiny::testServer(server, {
     output$data_preview_status_ui$html,
     fixed = TRUE
   ))
+
+  session$setInputs(
+    plot_type = "Line plot",
+    x_var = "X",
+    y_var = "Y",
+    group_var = "gender",
+    group_color = TRUE,
+    group_shape = TRUE,
+    group_linetype = TRUE,
+    show_se = TRUE,
+    x_as_factor = FALSE,
+    plot_title = "",
+    x_label_custom = "",
+    y_label_custom = "",
+    legend_title = "",
+    x_min = NA_real_,
+    x_max = NA_real_,
+    y_min = NA_real_,
+    y_max = NA_real_,
+    plot_theme = "minimal"
+  )
+  styled_line_plot <- plot_object()
+  stopifnot(inherits(styled_line_plot, "ggplot"))
+  stopifnot(all(c("colour", "shape", "linetype") %in% names(styled_line_plot$mapping)))
+  stopifnot(length(styled_line_plot$layers) == 3)
+
+  session$setInputs(plot_type = "Bar plot", show_se = TRUE)
+  bar_plot_with_se <- plot_object()
+  stopifnot(inherits(bar_plot_with_se, "ggplot"))
+  stopifnot(length(bar_plot_with_se$layers) == 2)
+
+  session$setInputs(show_se = FALSE)
+  bar_plot_without_se <- plot_object()
+  stopifnot(length(bar_plot_without_se$layers) == 1)
 })
 
 cat("Server filter test passed.\n")

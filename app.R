@@ -773,6 +773,13 @@ server <- function(input, output, session) {
     has_y <- y_var != "None" && y_var %in% names(dat)
     has_group <- group_var != "None" && group_var %in% names(dat)
     has_facet <- facet_var != "None" && facet_var %in% names(dat)
+    supports_group_point_styles <- input$plot_type %in% c("Scatterplot", "Line plot")
+    use_group_color <- has_group && supports_group_point_styles &&
+      isTRUE(input$group_color)
+    use_group_shape <- has_group && supports_group_point_styles &&
+      isTRUE(input$group_shape)
+    use_group_linetype <- has_group && input$plot_type == "Line plot" &&
+      isTRUE(input$group_linetype)
 
     validate(need(nrow(dat) > 0, "No observations remain after applying the filters and exclusions."))
     
@@ -864,6 +871,15 @@ server <- function(input, output, session) {
             geom = "col",
             na.rm = TRUE
           )
+
+        if (isTRUE(input$show_se)) {
+          p <- p + stat_summary(
+            fun.data = mean_se,
+            geom = "errorbar",
+            width = 0.2,
+            na.rm = TRUE
+          )
+        }
         
       } else {
         
@@ -881,6 +897,16 @@ server <- function(input, output, session) {
             position = position_dodge(width = 0.9),
             na.rm = TRUE
           )
+
+        if (isTRUE(input$show_se)) {
+          p <- p + stat_summary(
+            fun.data = mean_se,
+            geom = "errorbar",
+            width = 0.2,
+            position = position_dodge(width = 0.9),
+            na.rm = TRUE
+          )
+        }
       }
     }
     
@@ -955,29 +981,33 @@ server <- function(input, output, session) {
         x_var_plot <- ".plot_index"
       }
       
-      if (!has_group) {
-        
-        p <- ggplot(
-          dat,
-          aes(
-            x = .data[[x_var_plot]],
-            y = .data[[y_var]]
-          )
-        ) +
-          geom_point()
-        
-      } else {
-        
-        p <- ggplot(
-          dat,
-          aes(
-            x = .data[[x_var_plot]],
-            y = .data[[y_var]],
-            color = .data[[group_var_plot]]
-          )
-        ) +
-          geom_point()
+      scatter_mapping <- aes(
+        x = .data[[x_var_plot]],
+        y = .data[[y_var]]
+      )
+
+      if (use_group_color && use_group_shape) {
+        scatter_mapping <- aes(
+          x = .data[[x_var_plot]],
+          y = .data[[y_var]],
+          color = .data[[group_var_plot]],
+          shape = .data[[group_var_plot]]
+        )
+      } else if (use_group_color) {
+        scatter_mapping <- aes(
+          x = .data[[x_var_plot]],
+          y = .data[[y_var]],
+          color = .data[[group_var_plot]]
+        )
+      } else if (use_group_shape) {
+        scatter_mapping <- aes(
+          x = .data[[x_var_plot]],
+          y = .data[[y_var]],
+          shape = .data[[group_var_plot]]
+        )
       }
+
+      p <- ggplot(dat, scatter_mapping) + geom_point()
       
       if (input$add_smooth) {
         p <- p + geom_smooth(
@@ -1001,28 +1031,40 @@ server <- function(input, output, session) {
       }
       
       if (!has_group) {
-        
-        p <- ggplot(
-          dat,
-          aes(
-            x = .data[[x_var_plot]],
-            y = .data[[y_var]]
-          )
-        ) +
-          geom_line()
-        
+        line_mapping <- aes(
+          x = .data[[x_var_plot]],
+          y = .data[[y_var]],
+          group = 1
+        )
       } else {
-        
-        p <- ggplot(
-          dat,
-          aes(
-            x = .data[[x_var_plot]],
-            y = .data[[y_var]],
-            color = .data[[group_var_plot]],
-            group = .data[[group_var_plot]]
-          )
-        ) +
-          geom_line()
+        line_mapping <- aes(
+          x = .data[[x_var_plot]],
+          y = .data[[y_var]],
+          group = .data[[group_var_plot]]
+        )
+
+        if (use_group_color) {
+          line_mapping$colour <- aes(colour = .data[[group_var_plot]])$colour
+        }
+        if (use_group_shape) {
+          line_mapping$shape <- aes(shape = .data[[group_var_plot]])$shape
+        }
+        if (use_group_linetype) {
+          line_mapping$linetype <- aes(linetype = .data[[group_var_plot]])$linetype
+        }
+      }
+
+      p <- ggplot(dat, line_mapping) +
+        stat_summary(fun = mean, geom = "line", na.rm = TRUE) +
+        stat_summary(fun = mean, geom = "point", na.rm = TRUE)
+
+      if (isTRUE(input$show_se)) {
+        p <- p + stat_summary(
+          fun.data = mean_se,
+          geom = "errorbar",
+          width = 0.1,
+          na.rm = TRUE
+        )
       }
     }
     
@@ -1158,22 +1200,60 @@ server <- function(input, output, session) {
       legend_labels <- group_label_values()
       
       if (!is.null(legend_labels)) {
-        
-        p <- p +
-          scale_color_discrete(
+        group_scale_levels <- levels(dat[[group_var_plot]])
+        group_scale_labels <- unname(legend_labels[group_scale_levels])
+        group_colors <- stats::setNames(
+          scales::hue_pal()(length(group_scale_levels)),
+          group_scale_levels
+        )
+
+        if (input$plot_type %in% c("Histogram", "Bar plot")) {
+          p <- p + scale_fill_manual(
             name = legend_title,
-            limits = names(legend_labels),
-            breaks = names(legend_labels),
-            labels = unname(legend_labels),
-            drop = FALSE
-          ) +
-          scale_fill_discrete(
-            name = legend_title,
-            limits = names(legend_labels),
-            breaks = names(legend_labels),
-            labels = unname(legend_labels),
-            drop = FALSE
+            values = group_colors,
+            breaks = group_scale_levels,
+            labels = group_scale_labels
           )
+        } else if (input$plot_type == "Boxplot" || use_group_color) {
+          p <- p + scale_colour_manual(
+            name = legend_title,
+            values = group_colors,
+            breaks = group_scale_levels,
+            labels = group_scale_labels
+          )
+        }
+
+        if (use_group_shape) {
+          group_shapes <- stats::setNames(
+            rep(
+              c(16, 17, 15, 3, 7, 8),
+              length.out = length(group_scale_levels)
+            ),
+            group_scale_levels
+          )
+          p <- p + scale_shape_manual(
+            name = legend_title,
+            values = group_shapes,
+            breaks = group_scale_levels,
+            labels = group_scale_labels
+          )
+        }
+
+        if (use_group_linetype && input$plot_type == "Line plot") {
+          group_linetypes <- stats::setNames(
+            rep(
+              c("solid", "22", "42", "44", "13", "1343"),
+              length.out = length(group_scale_levels)
+            ),
+            group_scale_levels
+          )
+          p <- p + scale_linetype_manual(
+            name = legend_title,
+            values = group_linetypes,
+            breaks = group_scale_levels,
+            labels = group_scale_labels
+          )
+        }
       }
     }
 

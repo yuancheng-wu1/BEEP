@@ -285,6 +285,13 @@ make_plot_code <- function(input, dat, conditions = list()) {
   has_x <- x_var != "None" && x_var %in% names(dat)
   has_y <- y_var != "None" && y_var %in% names(dat)
   has_group <- group_var != "None" && group_var %in% names(dat)
+  supports_group_point_styles <- input$plot_type %in% c("Scatterplot", "Line plot")
+  use_group_color <- has_group && supports_group_point_styles &&
+    isTRUE(input$group_color)
+  use_group_shape <- has_group && supports_group_point_styles &&
+    isTRUE(input$group_shape)
+  use_group_linetype <- has_group && input$plot_type == "Line plot" &&
+    isTRUE(input$group_linetype)
   
   legend_title <- trimws(input$legend_title %||% "")
   if (has_group && !nzchar(legend_title)) {
@@ -445,7 +452,7 @@ make_plot_code <- function(input, dat, conditions = list()) {
   if (has_x &&
       isTRUE(input$x_as_factor) &&
       length(exclude_x_levels) > 0) {
-    
+
     excluded_x_text <- paste(
       vapply(exclude_x_levels, quote_r, character(1)),
       collapse = ", "
@@ -556,11 +563,18 @@ make_plot_code <- function(input, dat, conditions = list()) {
       paste0("y = ", y_expr)
     )
     
-    if (has_group) {
-      aes_parts <- c(
-        aes_parts,
-        paste0("color = ", group_expr)
-      )
+    if (has_group && input$plot_type == "Boxplot") {
+      aes_parts <- c(aes_parts, paste0("color = ", group_expr))
+    } else if (use_group_color) {
+      aes_parts <- c(aes_parts, paste0("color = ", group_expr))
+    }
+
+    if (use_group_shape && input$plot_type %in% c("Scatterplot", "Line plot")) {
+      aes_parts <- c(aes_parts, paste0("shape = ", group_expr))
+    }
+
+    if (use_group_linetype && input$plot_type == "Line plot") {
+      aes_parts <- c(aes_parts, paste0("linetype = ", group_expr))
     }
     
     if (input$plot_type == "Boxplot" && has_group) {
@@ -581,17 +595,17 @@ make_plot_code <- function(input, dat, conditions = list()) {
         aes_parts,
         paste0("group = ", group_expr)
       )
+    } else if (input$plot_type == "Line plot") {
+      aes_parts <- c(aes_parts, "group = 1")
     }
   }
   
-  lines <- c(
-    lines,
-    paste0(
-      "p <- ggplot(plot_data, aes(",
-      paste(aes_parts, collapse = ", "),
-      "))"
-    )
+  plot_call <- paste0(
+    "ggplot(plot_data, aes(",
+    paste(aes_parts, collapse = ", "),
+    "))"
   )
+  plot_components <- list()
   
   # ----- add plot layers -----
   
@@ -608,12 +622,12 @@ make_plot_code <- function(input, dat, conditions = list()) {
     }
     
     if (has_group) {
-      lines <- c(
-        lines,
-        'p <- p + geom_histogram(bins = 30, alpha = 0.6, position = "identity")'
+      plot_components <- c(
+        plot_components,
+        list('geom_histogram(bins = 30, alpha = 0.6, position = "identity")')
       )
     } else {
-      lines <- c(lines, "p <- p + geom_histogram(bins = 30)")
+      plot_components <- c(plot_components, list("geom_histogram(bins = 30)"))
     }
     
   } else if (input$plot_type == "Bar plot") {
@@ -630,24 +644,48 @@ make_plot_code <- function(input, dat, conditions = list()) {
     }
     
     if (has_group) {
-      lines <- c(
-        lines,
-        "p <- p + stat_summary(",
+      plot_components <- c(
+        plot_components,
+        list(c(
+        "stat_summary(",
         "  fun = mean,",
         "  geom = 'col',",
         "  position = position_dodge(width = 0.9),",
         "  na.rm = TRUE",
         ")"
+        ))
       )
     } else {
-      lines <- c(
-        lines,
-        "p <- p + stat_summary(",
+      plot_components <- c(
+        plot_components,
+        list(c(
+        "stat_summary(",
         "  fun = mean,",
         "  geom = 'col',",
         "  na.rm = TRUE",
         ")"
-      )}
+        ))
+      )
+    }
+
+    if (isTRUE(input$show_se)) {
+      errorbar_lines <- c(
+        "stat_summary(",
+        "  fun.data = mean_se,",
+        "  geom = 'errorbar',",
+        "  width = 0.2,"
+      )
+      if (has_group) {
+        errorbar_lines <- c(
+          errorbar_lines,
+          "  position = position_dodge(width = 0.9),"
+        )
+      }
+      plot_components <- c(
+        plot_components,
+        list(c(errorbar_lines, "  na.rm = TRUE", ")"))
+      )
+    }
     
     
   } else if (input$plot_type == "Boxplot") {
@@ -657,27 +695,29 @@ make_plot_code <- function(input, dat, conditions = list()) {
     }
     
     if (has_group) {
-      lines <- c(
-        lines,
-        "p <- p +",
-        "  geom_boxplot() +",
-        "  geom_point(",
-        "    position = position_jitterdodge(",
-        "      jitter.width = 0.08,",
-        "      seed = 123",
-        "    ),",
-        "    size = 1.5, alpha = 0.3",
-        "  )"
+      plot_components <- c(
+        plot_components,
+        list("geom_boxplot()"),
+        list(c(
+          "geom_point(",
+          "  position = position_jitterdodge(",
+          "    jitter.width = 0.08,",
+          "    seed = 123",
+          "  ),",
+          "  size = 1.5, alpha = 0.3",
+          ")"
+        ))
       )
     } else {
-      lines <- c(
-        lines,
-        "p <- p +",
-        "  geom_boxplot() +",
-        "  geom_point(",
-        "    position = position_jitter(width = 0.08, seed = 123),",
-        "    size = 1.5, alpha = 0.3",
-        "  )"
+      plot_components <- c(
+        plot_components,
+        list("geom_boxplot()"),
+        list(c(
+          "geom_point(",
+          "  position = position_jitter(width = 0.08, seed = 123),",
+          "  size = 1.5, alpha = 0.3",
+          ")"
+        ))
       )
     }
     
@@ -687,12 +727,12 @@ make_plot_code <- function(input, dat, conditions = list()) {
       return("# Scatterplot requires a Y variable.")
     }
     
-    lines <- c(lines, "p <- p + geom_point()")
+    plot_components <- c(plot_components, list("geom_point()"))
     
     if (isTRUE(input$add_smooth)) {
-      lines <- c(
-        lines,
-        'p <- p + geom_smooth(method = "lm", se = TRUE)'
+      plot_components <- c(
+        plot_components,
+        list('geom_smooth(method = "lm", se = TRUE)')
       )
     }
     
@@ -702,7 +742,25 @@ make_plot_code <- function(input, dat, conditions = list()) {
       return("# Line plot requires a Y variable.")
     }
     
-    lines <- c(lines, "p <- p + geom_line()")
+    plot_components <- c(
+      plot_components,
+      list("stat_summary(fun = mean, geom = 'line', na.rm = TRUE)"),
+      list("stat_summary(fun = mean, geom = 'point', na.rm = TRUE)")
+    )
+
+    if (isTRUE(input$show_se)) {
+      plot_components <- c(
+        plot_components,
+        list(c(
+        "stat_summary(",
+        "  fun.data = mean_se,",
+        "  geom = 'errorbar',",
+        "  width = 0.1,",
+        "  na.rm = TRUE",
+        ")"
+        ))
+      )
+    }
   }
   
   
@@ -710,7 +768,9 @@ make_plot_code <- function(input, dat, conditions = list()) {
 
 if (has_facet) {
 
-  if (length(facet_levels) > 0) {
+  facet_labels_changed <- !identical(facet_levels, edited_facet_labels)
+
+  if (length(facet_levels) > 0 && facet_labels_changed) {
 
     facet_breaks_code <- paste(
       vapply(
@@ -732,24 +792,28 @@ if (has_facet) {
 
     lines <- c(
       lines,
-      "",
       paste0(
         "facet_labels <- stats::setNames(",
         "c(", facet_labels_code, "), ",
         "c(", facet_breaks_code, ")",
         ")"
-      ),
-      "p <- p + facet_wrap(",
-      paste0("  vars(", r_column_name(facet_var), "),"),
-      "  labeller = as_labeller(facet_labels)",
-      ")"
+      )
+    )
+    plot_components <- c(
+      plot_components,
+      list(c(
+        "facet_wrap(",
+        paste0("  vars(", r_column_name(facet_var), "),"),
+        "  labeller = as_labeller(facet_labels)",
+        ")"
+      ))
     )
 
   } else {
 
-    lines <- c(
-      lines,
-      paste0("p <- p + facet_wrap(vars(", r_column_name(facet_var), "))")
+    plot_components <- c(
+      plot_components,
+      list(paste0("facet_wrap(vars(", r_column_name(facet_var), "))"))
     )
   }
 }
@@ -797,25 +861,24 @@ if (has_facet) {
       "NULL"
     }
     
-    lines <- c(
-      lines,
-      paste0(
-        "p <- p + coord_cartesian(",
+    plot_components <- c(
+      plot_components,
+      list(paste0(
+        "coord_cartesian(",
         "xlim = ", x_limit_code,
         ", ylim = ", y_limit_code,
         ")"
-      )
+      ))
     )
   }
 
   # ----- renamed discrete X-axis levels -----
 
-  if (x_is_discrete && length(x_levels) > 0) {
-    x_breaks_code <- paste(
-      vapply(x_levels, quote_r, character(1)),
-      collapse = ", "
-    )
-
+  if (
+    x_is_discrete &&
+      length(x_levels) > 0 &&
+      !identical(x_levels, edited_x_labels)
+  ) {
     x_labels_code <- paste(
       vapply(edited_x_labels, quote_r, character(1)),
       collapse = ", "
@@ -823,11 +886,19 @@ if (has_facet) {
 
     lines <- c(
       lines,
-      "",
-      "p <- p + scale_x_discrete(",
-      paste0("  breaks = c(", x_breaks_code, "),"),
-      paste0("  labels = c(", x_labels_code, ")"),
-      ")"
+      paste0(
+        "x_levels <- levels(droplevels(factor(plot_data[[", quote_r(x_var), "]])))"
+      ),
+      paste0("x_labels <- stats::setNames(c(", x_labels_code, "), x_levels)")
+    )
+    plot_components <- c(
+      plot_components,
+      list(c(
+        "scale_x_discrete(",
+        "  breaks = x_levels,",
+        "  labels = x_labels[x_levels]",
+        ")"
+      ))
     )
   }
   
@@ -869,54 +940,135 @@ if (has_facet) {
     paste0("y = ", quote_r(y_label))
   )
   
-  lines <- c(
-    lines,
-    "",
-    paste0(
-      "p <- p + labs(",
+  plot_components <- c(
+    plot_components,
+    list(paste0(
+      "labs(",
       paste(label_parts, collapse = ", "),
       ")"
-    )
+    ))
   )
   
   # ----- legend title and renamed group levels -----
   
   if (has_group && length(group_levels) > 0) {
-    
-    breaks_code <- paste(
-      vapply(group_levels, quote_r, character(1)),
-      collapse = ", "
-    )
-    
-    labels_code <- paste(
-      vapply(edited_group_labels, quote_r, character(1)),
-      collapse = ", "
-    )
-    
-    if (input$plot_type %in% c("Histogram", "Bar plot")) {
-      lines <- c(
-        lines,
-        "",
-        "p <- p + scale_fill_discrete(",
-        paste0("  name = ", quote_r(legend_title), ","),
-        paste0("  limits = c(", breaks_code, "),"),
-        paste0("  breaks = c(", breaks_code, "),"),
-        paste0("  labels = c(", labels_code, "),"),
-        "  drop = FALSE",
+    scale_group_levels <- levels(droplevels(factor(filtered_dat[[group_var]])))
+    group_label_lookup <- stats::setNames(edited_group_labels, group_levels)
+    scale_group_labels <- unname(group_label_lookup[scale_group_levels])
+    group_labels_changed <- !identical(scale_group_levels, scale_group_labels)
+
+    manual_values_lines <- function(values, quote_values = TRUE) {
+      value_code <- if (quote_values) {
+        vapply(values, quote_r, character(1))
+      } else {
+        as.character(values)
+      }
+      entries <- paste0(
+        "    ",
+        vapply(scale_group_levels, quote_r, character(1)),
+        " = ",
+        value_code
+      )
+      if (length(entries) > 1) {
+        entries[-length(entries)] <- paste0(entries[-length(entries)], ",")
+      }
+      c("  values = c(", entries, "  )")
+    }
+
+    label_line <- if (group_labels_changed) {
+      paste0(
+        "  labels = c(",
+        paste(vapply(scale_group_labels, quote_r, character(1)), collapse = ", "),
         ")"
       )
-      
     } else {
-      lines <- c(
-        lines,
-        "",
-        "p <- p + scale_color_discrete(",
+      NULL
+    }
+    breaks_line <- if (group_labels_changed) {
+      paste0(
+        "  breaks = c(",
+        paste(vapply(scale_group_levels, quote_r, character(1)), collapse = ", "),
+        "),"
+      )
+    } else {
+      NULL
+    }
+
+    color_lines <- manual_values_lines(
+      scales::hue_pal()(length(scale_group_levels))
+    )
+    shape_lines <- manual_values_lines(
+      rep(c(16, 17, 15, 3, 7, 8), length.out = length(scale_group_levels)),
+      quote_values = FALSE
+    )
+    linetype_lines <- manual_values_lines(
+      rep(
+        c("solid", "22", "42", "44", "13", "1343"),
+        length.out = length(scale_group_levels)
+      )
+    )
+
+    if (group_labels_changed) {
+      color_lines[length(color_lines)] <- paste0(color_lines[length(color_lines)], ",")
+      shape_lines[length(shape_lines)] <- paste0(shape_lines[length(shape_lines)], ",")
+      linetype_lines[length(linetype_lines)] <- paste0(
+        linetype_lines[length(linetype_lines)], ","
+      )
+    }
+
+    if (input$plot_type %in% c("Histogram", "Bar plot")) {
+      plot_components <- c(
+        plot_components,
+        list(c(
+        "scale_fill_manual(",
         paste0("  name = ", quote_r(legend_title), ","),
-        paste0("  limits = c(", breaks_code, "),"),
-        paste0("  breaks = c(", breaks_code, "),"),
-        paste0("  labels = c(", labels_code, "),"),
-        "  drop = FALSE",
+        color_lines,
+        breaks_line,
+        label_line,
         ")"
+        ))
+      )
+      
+    } else if (input$plot_type == "Boxplot" || use_group_color) {
+      plot_components <- c(
+        plot_components,
+        list(c(
+        "scale_colour_manual(",
+        paste0("  name = ", quote_r(legend_title), ","),
+        color_lines,
+        breaks_line,
+        label_line,
+        ")"
+        ))
+      )
+    }
+
+
+    if (use_group_shape && input$plot_type %in% c("Scatterplot", "Line plot")) {
+      plot_components <- c(
+        plot_components,
+        list(c(
+        "scale_shape_manual(",
+        paste0("  name = ", quote_r(legend_title), ","),
+        shape_lines,
+        breaks_line,
+        label_line,
+        ")"
+        ))
+      )
+    }
+
+    if (use_group_linetype && input$plot_type == "Line plot") {
+      plot_components <- c(
+        plot_components,
+        list(c(
+        "scale_linetype_manual(",
+        paste0("  name = ", quote_r(legend_title), ","),
+        linetype_lines,
+        breaks_line,
+        label_line,
+        ")"
+        ))
       )
     }
   }
@@ -931,10 +1083,24 @@ if (has_facet) {
     "theme_minimal(base_size = 14)"
   )
   
+  plot_components <- c(plot_components, list(theme_code))
+
+  component_lines <- unlist(
+    lapply(seq_along(plot_components), function(i) {
+      component <- plot_components[[i]]
+      component <- paste0("  ", component)
+      if (i < length(plot_components)) {
+        component[length(component)] <- paste0(component[length(component)], " +")
+      }
+      component
+    }),
+    use.names = FALSE
+  )
+
   lines <- c(
     lines,
-    "",
-    paste0("p <- p + ", theme_code),
+    paste0("p <- ", plot_call, " +"),
+    component_lines,
     "",
     "p"
   )

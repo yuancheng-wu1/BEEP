@@ -334,9 +334,39 @@ ui <- page_navbar(
             
             selectInput(
               inputId = "group_var",
-              label = "Color / group variable",
+              label = "Group variable",
               choices = "None",
               selected = "None"
+            ),
+
+            conditionalPanel(
+              condition = paste(
+                "input.group_var != 'None' &&",
+                "(input.plot_type == 'Scatterplot' || input.plot_type == 'Line plot')"
+              ),
+
+              tags$strong("Identify groups with"),
+
+              checkboxInput(
+                inputId = "group_color",
+                label = "Colors",
+                value = TRUE
+              ),
+
+              checkboxInput(
+                inputId = "group_shape",
+                label = "Point shapes",
+                value = FALSE
+              ),
+
+              conditionalPanel(
+                condition = "input.plot_type == 'Line plot'",
+                checkboxInput(
+                  inputId = "group_linetype",
+                  label = "Line types",
+                  value = FALSE
+                )
+              )
             ),
             
             uiOutput("group_filter_ui"),
@@ -350,10 +380,25 @@ ui <- page_navbar(
             
             uiOutput("facet_filter_ui"),
             
-            checkboxInput(
-              inputId = "add_smooth",
-              label = "Add regression line",
-              value = FALSE
+            conditionalPanel(
+              condition = "input.plot_type == 'Scatterplot'",
+              checkboxInput(
+                inputId = "add_smooth",
+                label = "Add regression line",
+                value = FALSE
+              )
+            ),
+
+            conditionalPanel(
+              condition = paste(
+                "input.plot_type == 'Line plot' ||",
+                "input.plot_type == 'Bar plot'"
+              ),
+              checkboxInput(
+                inputId = "show_se",
+                label = "Show SE",
+                value = TRUE
+              )
             )
           ),
           

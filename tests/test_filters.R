@@ -64,6 +64,10 @@ plot_input <- list(
   plot_theme = "minimal",
   plot_type = "Scatterplot",
   add_smooth = FALSE,
+  group_color = TRUE,
+  group_shape = FALSE,
+  group_linetype = FALSE,
+  show_se = TRUE,
   plot_title = "",
   x_label_custom = "",
   y_label_custom = "",
@@ -113,7 +117,71 @@ for (case_input in plot_cases) {
   case_plot <- eval(parse(text = case_code), envir = case_environment)
   stopifnot(inherits(case_plot, "ggplot"))
   stopifnot(!grepl(".data[[", case_code, fixed = TRUE))
+  stopifnot(!grepl("p <- p +", case_code, fixed = TRUE))
 }
+
+line_code <- make_plot_code(utils::modifyList(plot_input, list(
+  plot_type = "Line plot",
+  group_var = "gender",
+  group_color = TRUE,
+  group_shape = TRUE,
+  group_linetype = TRUE,
+  show_se = TRUE
+)), dat)
+stopifnot(grepl("color = factor(gender)", line_code, fixed = TRUE))
+stopifnot(grepl("shape = factor(gender)", line_code, fixed = TRUE))
+stopifnot(grepl("linetype = factor(gender)", line_code, fixed = TRUE))
+stopifnot(grepl("fun.data = mean_se", line_code, fixed = TRUE))
+stopifnot(grepl("scale_colour_manual", line_code, fixed = TRUE))
+stopifnot(grepl("scale_shape_manual", line_code, fixed = TRUE))
+stopifnot(grepl("scale_linetype_manual", line_code, fixed = TRUE))
+stopifnot(!grepl("group_levels <-", line_code, fixed = TRUE))
+stopifnot(!grepl("group_colors <-", line_code, fixed = TRUE))
+stopifnot(!grepl("group_shapes <-", line_code, fixed = TRUE))
+stopifnot(!grepl("group_linetypes <-", line_code, fixed = TRUE))
+stopifnot(!grepl("drop = FALSE", line_code, fixed = TRUE))
+stopifnot(grepl('"female" = "#', line_code, fixed = TRUE))
+stopifnot(grepl('"female" = 16', line_code, fixed = TRUE))
+stopifnot(grepl('"female" = "solid"', line_code, fixed = TRUE))
+stopifnot(!grepl("breaks =", line_code, fixed = TRUE))
+stopifnot(!grepl("p <- p +", line_code, fixed = TRUE))
+line_environment <- new.env(parent = globalenv())
+line_environment$dat <- dat
+styled_line_plot <- eval(parse(text = line_code), envir = line_environment)
+stopifnot(inherits(styled_line_plot, "ggplot"))
+stopifnot(all(c("colour", "shape", "linetype") %in% names(styled_line_plot$mapping)))
+
+line_without_se <- make_plot_code(utils::modifyList(plot_input, list(
+  plot_type = "Line plot",
+  group_var = "gender",
+  show_se = FALSE
+)), dat)
+stopifnot(!grepl("fun.data = mean_se", line_without_se, fixed = TRUE))
+
+renamed_group_code <- make_plot_code(utils::modifyList(plot_input, list(
+  plot_type = "Line plot",
+  group_var = "gender",
+  group_shape = TRUE,
+  group_label_1 = "Men"
+)), dat)
+stopifnot(!grepl("group_labels <-", renamed_group_code, fixed = TRUE))
+stopifnot(grepl('breaks = c("female", "male")', renamed_group_code, fixed = TRUE))
+stopifnot(grepl("labels = c(", renamed_group_code, fixed = TRUE))
+renamed_group_environment <- new.env(parent = globalenv())
+renamed_group_environment$dat <- dat
+stopifnot(inherits(
+  eval(parse(text = renamed_group_code), envir = renamed_group_environment),
+  "ggplot"
+))
+
+bar_with_se <- make_plot_code(utils::modifyList(plot_input, list(
+  plot_type = "Bar plot",
+  x_as_factor = TRUE,
+  group_var = "gender",
+  show_se = TRUE
+)), dat)
+stopifnot(grepl("fun.data = mean_se", bar_with_se, fixed = TRUE))
+stopifnot(grepl("position_dodge(width = 0.9)", bar_with_se, fixed = TRUE))
 
 nonstandard_dat <- data.frame(check.names = FALSE, "Series length" = 1:3, "Outcome score" = 4:6)
 nonstandard_input <- utils::modifyList(plot_input, list(
